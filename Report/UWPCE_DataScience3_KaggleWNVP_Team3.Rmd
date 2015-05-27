@@ -44,7 +44,7 @@ Download the training, test, spray, and weather data from the Kaggle web site pa
 Please see Appendix for R (and Python) code that:
 
 * General Setup: Clears environment, sets working directory, loads libraries
-* downloads the data from the Kaggle site and unzips them. 
+* Downloads the data from the Kaggle site and unzips them. 
 
 ```{r Setup, echo=FALSE, results='hide',message=FALSE}
 # Clear the working environment of variables, data, functions
@@ -58,9 +58,12 @@ getwd()
 
 #install.packages("rPython")  # For download from web site with login/pwd.
 library(rPython) # For calling python function to download file w/login+pwd
+# Package for writing Weka ARFF file format
+stopifnot(require("foreign"))
+library("foreign")
 ```
 
-```{r GetDatasetsIntoPwd, echo=FALSE, results='hide',message=FALSE}
+```{r GetDatasetsIntoInputDir, echo=FALSE, results='hide',message=FALSE}
 wnvpTrainFilename <- "train.csv"
 wnvpTestFilename <- "test.csv"
 wnvpWeatherFilename <- "weather.csv"
@@ -70,7 +73,8 @@ kaggleDatasets = c(
     wnvpTestFilename, 
     wnvpWeatherFilename, 
     wnvpSprayFilename)
-dataSubDir= "Data"
+dataSubDir <- "input"  # Kaggle convention
+workingSubDir <- "working" # Kaggle convention: massaged datasets - and output - go here.
 
 # If download from Kaggle required, and user and pwd are empty (default),
 # then user will be prompted for these two values.
@@ -89,7 +93,7 @@ allKaggleFilesArePresent <- function() {
 }
 
 downloadMissingKaggleFiles <- function() {
-    python.load("UrlFileDownloaderWithLogin.py")
+    python.load("src/UrlFileDownloaderWithLogin.py")
     
     kaggleUsername = Sys.getenv("kaggleUsername")
     kagglePassword = Sys.getenv("kagglePassword")
@@ -110,7 +114,7 @@ downloadMissingKaggleFiles <- function() {
         urlOfZip <- paste0(wnvpKaggleDataUrl, file, ".zip")
         print(urlOfZip)
         # Use a python method to download from URL with login and password.
-        # Download to subdirectory Data and filename w/o the .zip suffix.
+        # Download to subdirectory "input" and filename w/o the .zip suffix.
         python.call("Download", urlOfZip, 
                     kaggleUsername, kagglePassword , 
                     paste0(dataSubDir, "/", file, ".zip"))
@@ -146,6 +150,94 @@ stopifnot(allKaggleFilesArePresent())
 print("All unzipped Kaggle datasets found in PWD. Proceeding.")
 ```
 
+## Create train and test datasets compatible with Weka (ARFF) and each other (same attributes)
+
+NOT YET: Distance from weather stations.
+NOT YET: Weather data joined.
+
+* Read in test and train csv-format files into data frames.
+* Make the train and test datasets have the same attributes:
+    * Train: Convert the WnvPresent column from numeric to factor with levels "Yes" and "No".
+    * Test: Remove Id attribute.
+    * Test: Add a NumMosquitos integer column, all 0.
+    * Test: Add a WnvPresent factor column, all with "No" level.
+    
+* Combine train and test into a single data frame and transform all as follows:
+    * Remove the block attributes of little use: 
+        * Address, Block, Street, AddressNumberAndStreet, AddressAccuracy.
+    * Convert the Species factor into bit vectors (a new column for each of the factor levels, with a zero or 1 value)
+    * Convert date into date format, add "Year" and "Month" attributes.
+
+* Write the combined file out in two subsets (train and test), with both files in ARFF format with same ARFF header.
+    
+```{r WekaFilesForFirstSubmission}
+train_df <- read.csv(paste0(dataSubDir, "/", wnvpTrainFilename))
+train_df$WnvPresent <- as.factor(train_df$WnvPresent)
+levels(train_df$WnvPresent) <- c("No", "Yes")
+
+test_df <- read.csv(paste0(dataSubDir, "/", wnvpTestFilename))
+test_df$Id <- NULL
+test_df <- cbind(NumMosquitos=0, test_df)
+WnvPresent <- factor("No", levels=c("No","Yes"))
+test_df <- cbind(test_df, WnvPresent)
+
+combined <- rbind(train_df, test_df)
+
+attrsToRemove <- c("Address", "Block", "Street", "AddressNumberAndStreet", "AddressAccuracy")
+combined <- combined[,!names(combined) %in% attrsToRemove]
+
+# Convert Species into a bit vector, one column for each factor level
+combined <- with(combined, cbind(model.matrix( ~ 0 + Species, combined), combined))
+
+# Tries %Y-%m-%d by default, but what the heck, explicitly state the format.
+combined$Date <- as.Date(combined$Date, format="%Y-%m-%d")
+Year <- format(combined$Date, "%Y")
+Month <- format(combined$Date, "%m")
+# Prepend year and month, leaving classification attribute in last column
+combined <- cbind(Year, Month, combined)
+# Move Date to first column, near Year and Month.
+combined <- combined[,c(11,1,2,3,4,5,6,7,8,9,10,12,13,14,15,16,17)]
+# Remove the Species attribute - replaced by bit vectors.
+combined$Species <- NULL
+
+write.arff(combined[1:nrow(train_df),], 
+           paste0(workingSubDir, "/", "train01", ".arff"), 
+           eol = '\n', relation="WNVPTrainDataset")
+str(combined[1:nrow(train_df),])
+
+write.arff(combined[nrow(train_df)+1:nrow(combined),], 
+           paste0(workingSubDir, "/", "test01", ".arff"), 
+           eol = '\n', relation="WNVPTestDataset")
+str(combined[nrow(train_df)+1:nrow(combined),])
+```
+
+## Distance of Trap from the Two Weather Stations
+
+**NOT YET USED**
+
+[Distance function by "Curlew"](https://conservationecology.wordpress.com/2013/06/30/distance-between-two-points-in-r/)
+
+Alternative: [R Geosphere Package](http://cran.r-project.org/web/packages/geosphere/geosphere.pdf)
+
+```{r SphericalSurfaceDistanceFunction}
+# From https://conservationecology.wordpress.com/2013/06/30/distance-between-two-points-in-r/
+# Calculate distance in kilometers between two points
+earth.dist <- function (long1, lat1, long2, lat2)
+{
+    rad <- pi/180
+    a1 <- lat1 * rad
+    a2 <- long1 * rad
+    b1 <- lat2 * rad
+    b2 <- long2 * rad
+    dlon <- b2 - a2
+    dlat <- b1 - a1
+    a <- (sin(dlat/2))^2 + cos(a1) * cos(b1) * (sin(dlon/2))^2
+    c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+    R <- 6378.145
+    d <- R * c
+    return(d)
+}
+```
 # Appendix
 
 ## General Setup: Clear environment, set working directory, load libraries
@@ -164,7 +256,7 @@ defined as environment variables where R is running.
 
 Alternatively, files can be downloaded manually.
   
-```{r GetDatasetsIntoPwd,eval=FALSE}
+```{r GetDatasetsIntoInputDir,eval=FALSE}
 ``` 
 
 File UrlFileDownloaderWithLogin.py:
