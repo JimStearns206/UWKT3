@@ -1,0 +1,33 @@
+Topic: Utilizing Spray Data
+
+I’ve been thinking about an attribute for the spray data.
+
+Any model is an approximation of reality. So is any particular attribute. There are gaps in knowledge (certainly mine!) and in data, so assumptions must be made. Here goes.
+
+* What kind of spray is CDPH using - adulticide or larvicide? It matters because larvicide involves a delay between administering the spray and noting the effects (i.e. fewer adults will hatch three days later).
+
+* I’m assuming that CDPH is using adulticide. The 2013 spray data has a timestamp. The CPDH spraying is done at night. Adulticides are sprayed at night when most mosquitos are flying instead of resting [1]. Larvicides are applied to water; I’m thinking daylight is more conducive for such an operation. So, adulticide.
+
+* Adulticides are a fog. Fogs dissipate, so there’s a limited time of effectiveness. I will assume one night. 
+
+* Mosquitos must come into contact with the fog to be killed. So I’ll assume effectiveness declines with increased distance between spray application and trap, reaching zero at say, one kilometer.
+
+* Adulticide fog floats with air currents. Sure wish I could take wind direction and speed into account, but due to limited time, I think we’re going to have to punt on accounting for wind.
+
+* Spray is administered in the evening. I’m assuming that nearby trap measurements next day will be affected. 
+
+* The spray data needs to be massaged a bit. Most all of the 2013 sprayings were done between 6PM and midnight. About 1% done between midnight and 1AM. Five entries out of 14K+ were around 10AM. Typos or real? Dunno. I suggest we treat every spray as occurring at 12:01AM; that simplifies the date compare between trap and spray data. That means for evening sprays we’d use a date one day later. 2011 spray data has no timestamp; let’s assume that all were evening (pre-midnight) sprays.
+
+* Putting this all together could lead to a “Same-Day Spray Proximity Index”. Range 0 to 1. Zero if no spray within a kilometer of that trap that day, one if a spray within a tenth of a kilometer that day, with a linear ramp with distance.
+
+Comments would be much appreciated.
+
+Does this look worth doing? Just a small matter of programming :-)
+
+Thanks,
+
+Jim
+
+Sources:
+[1] http://www.cdph.ca.gov/HealthInfo/discond/Documents/MosquitoControlPesticideInformation.pdf
+[2] http://www.mosquito.org/faq
