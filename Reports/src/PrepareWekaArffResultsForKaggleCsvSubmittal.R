@@ -1,10 +1,12 @@
 # Script to read in ARFF file created by Weka modeler,
-# atrip all attributes except the predicted classification (here, "WnvPresent"),
+# strip all attributes except the predicted classification (here, "WnvPresent"),
 # add an Id column with a sequence number equal to the record number; and
 # write as a CSV file.
 
+library("foreign") # For read.arff
 wnvpTestFileNRecs <- 116293 # Records in test file supplied by Kaggle. Submission record cnt must match.
-arffInFilename <- "working/testClassified02"
+
+arffInFilename <- "working/testWekaClassifiedXX"  # Change for your filename.
 testClassified_df <- read.arff(paste0(arffInFilename, ".arff"))
 stopifnot(nrow(testClassified_df) == wnvpTestFileNRecs)
 

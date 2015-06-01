@@ -252,7 +252,7 @@ stopifnot(nrow(combinedMaster) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 * Write the combined "master" (all attributes) file out in two subsets (train and test), as CSV.
 
 ```{r WriteMasterTrainAndTestAsCsv}
-curMasterIdx = "01"  # Bump as more attributes are added
+curMasterIdx = "02"  # Bump as more attributes are added
 nTrainingRecs = nrow(train_df)
 nTotalRecs = wnvpTrainFileNRecs + wnvpTestFileNRecs
 stopifnot(nrow(combinedMaster) == nTotalRecs)
@@ -271,6 +271,12 @@ write.csv(testRecs,
            eol = '\n')
 str(testRecs)
 
+# Write the combined master - train and test - as a CSV file. 
+# Good starting point for future experiments.
+write.csv(combinedMaster, 
+           paste0(workingSubDir, "/", "trainAndTest", curMasterIdx, ".csv"), 
+           eol = '\n')
+str(combinedMaster)
 ```
 
 * Write the combined "master" (all records, some attributes, both train and test records) 
@@ -278,9 +284,7 @@ file out in two subsets (train and test), with both files in ARFF format with sa
 
 Perform any subsetting here so that train and test formats look the same to Weka.
 
-
-
-### May 17 Submittal by Pat Leahy
+### Reproduction of May 17 Submittal by Pat Leahy
 
 ```{r PareDownColumnsToThoseUsedInArffModeling}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
@@ -303,6 +307,130 @@ write.arff(oversample_df,
            paste0(workingSubDir, "/", "train", curMasterIdx, ".arff"), 
            eol = '\n', relation="WNVPTrainDataset")
 str(oversample_df)
+
+testRecs <- combinedForModeling[(nTrainingRecs+1):nTotalRecs,]
+stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
+write.arff(testRecs, 
+           paste0(workingSubDir, "/", "test", curMasterIdx, ".arff"), 
+           eol = '\n', relation="WNVPTestDataset")
+str(testRecs)
+```
+
+### May 28: Additional Predictors (Species bit vectors, NumMosqitos)
+
+Note: Dataset rolls over to a new record if number of mosquitos reaches 50.
+TODO: Same date, same lat/long, same Species: combine the records.
+
+```{r PareDownColumnsToThoseUsedInArffModeling}
+colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
+colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
+             "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
+             "SpeciesCULEX TARSALIS", "SpeciesCULEX TERRITANS", "SpeciesUNSPECIFIED CULEX")
+colsToKeep=c(colsToKeep, "NumMosquitos")
+combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
+stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+```
+
+Oversample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
+
+```{r OversampleWnvPresent}
+trainRecs <- combinedForModeling[1:nTrainingRecs,]
+oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
+nFalseObservationsToUse <- nrow(oversample_df)
+wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
+oversample_df <- rbind(oversample_df, wnvNotPresent[sample(nrow(wnvNotPresent), nFalseObservationsToUse),])
+
+write.arff(oversample_df, 
+           paste0(workingSubDir, "/", "train", curMasterIdx, ".arff"), 
+           eol = '\n', relation="WNVPTrainDataset")
+str(oversample_df)
+
+testRecs <- combinedForModeling[(nTrainingRecs+1):nTotalRecs,]
+stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
+write.arff(testRecs, 
+           paste0(workingSubDir, "/", "test", curMasterIdx, ".arff"), 
+           eol = '\n', relation="WNVPTestDataset")
+str(testRecs)
+```
+### May 28 #2: Additional Predictor (Species bit vectors, NumMosqitos)
+```{r PareDownColumnsToThoseUsedInArffModeling}
+colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
+colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
+             "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
+             "SpeciesCULEX TARSALIS", "SpeciesCULEX TERRITANS", "SpeciesUNSPECIFIED CULEX")
+colsToKeep=c(colsToKeep, "NumMosquitos")
+combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
+stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+```
+
+Oversample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
+
+```{r OversampleWnvPresent}
+
+trainRecs <- combinedForModeling[1:nTrainingRecs,]
+oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
+nFalseObservationsToUse <- nrow(oversample_df)
+wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
+oversample_df <- rbind(oversample_df, wnvNotPresent[sample(nrow(wnvNotPresent), nFalseObservationsToUse),])
+
+write.arff(oversample_df, 
+           paste0(workingSubDir, "/", "train", curMasterIdx, ".arff"), 
+           eol = '\n', relation="WNVPTrainDataset")
+str(oversample_df)
+
+testRecs <- combinedForModeling[(nTrainingRecs+1):nTotalRecs,]
+stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
+write.arff(testRecs, 
+           paste0(workingSubDir, "/", "test", curMasterIdx, ".arff"), 
+           eol = '\n', relation="WNVPTestDataset")
+str(testRecs)
+NumMosquitos degraded score. Left Species bit vector.
+```
+### May 28 #3: Additional Predictor (Species bit vectors). Use SMOTE in Weka for oversampling.
+Change: use SMOTE in Weka to oversample WnvPresent. Don't undersample !WnvPresent here.
+    In Weka, randomize after creating synthetic entries - they got stuffed at end
+    and cause 10-fold cross validation to mess up.
+    
+```{r DontUndersampleHere-LetWekaUseSMOTE}
+curMasterIdx <- "04"
+colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
+colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
+             "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
+             "SpeciesCULEX TARSALIS", "SpeciesCULEX TERRITANS", "SpeciesUNSPECIFIED CULEX")
+combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
+stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+
+nTrainingRecs = nrow(train_df)
+nTotalRecs = wnvpTrainFileNRecs + wnvpTestFileNRecs
+stopifnot(nrow(combinedMaster) == nTotalRecs)
+
+trainRecs <- combinedMaster[1:nTrainingRecs,]
+stopifnot(nTrainingRecs == wnvpTrainFileNRecs)
+write.csv(trainRecs, 
+           paste0(workingSubDir, "/", "train", curMasterIdx, ".csv"), 
+           eol = '\n')
+str(trainRecs)
+
+testRecs <- combinedMaster[(nTrainingRecs+1):nTotalRecs,]
+stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
+write.csv(testRecs, 
+           paste0(workingSubDir, "/", "test", curMasterIdx, ".csv"), 
+           eol = '\n')
+str(testRecs)
+
+# Write the combined master - train and test - as a CSV file. 
+# Good starting point for future experiments.
+write.csv(combinedMaster, 
+           paste0(workingSubDir, "/", "trainAndTest", curMasterIdx, ".csv"), 
+           eol = '\n')
+str(combinedMaster)
+
+trainRecs <- combinedForModeling[1:nTrainingRecs,]
+
+write.arff(trainRecs, 
+           paste0(workingSubDir, "/", "train", curMasterIdx, ".arff"), 
+           eol = '\n', relation="WNVPTrainDataset")
+str(trainRecs)
 
 testRecs <- combinedForModeling[(nTrainingRecs+1):nTotalRecs,]
 stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
