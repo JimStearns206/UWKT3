@@ -1,0 +1,53 @@
+Team,
+
+Dr. Barga emphasized that all team members should make at least one submission to Kaggle. Pat made the first two submissions, giving some helpful hints on how to do so. Using those hints, I've made four submissions in the last two days and would like to supplement Pat's hints. Here they are.
+Dr. Barga said he wanted all submissions to be completed by the last class on June 2nd. We have an additional week to do our write-up.
+There's a team limit of 5 submissions per day. The count resets to zero at 5PM PST (Midnight UTC).
+Five days remain (Fri-Tue). That's 25 possible submissions. That should allow the six team members not yet having made a submission to do so.
+But Tuesday could get tight. I'd urge you to submit before Tuesday.
+How to prepare a submission:
+In Weka Classify tab, specify "Test options" as  "Supplied test set", supplying the test.arff or test.csv with attributes matching those in the training set, including the classification (output) attribute.
+Google Drive UWKT3 Reports/UWPCE_DataScience3_KaggleWNVP_Team3.Rmd has some R code that creates train and test datasets in ARFF format. Technique: combine the train and test data in one data frame, then write.arff two subsets, both written with the same header attributes.
+Start the classifier. If you like the results and want to use them in a submission:
+Right-click the entry in the Result list.
+Select "Visualize classifier errors."
+You should get a popup menu "Weka Classifier Visualize".
+Use the "Save" button to save the classifications in an ARFF file. 
+Convert the ARFF file into a two column csv file with Id and WnvPresent columns. An R script to do so is attached.
+Submittal is straightforward: get to the submittal page, drag-n-drop the csv file, add short description.
+Please capture the following information:
+Submitted csv file.
+Copy-paste of "Classifier Output" from Weka into a file named something like "model.txt". Example is attached.
+Screenshot of the Leaderboard showing your submittal. Example is attached.
+Screenshot of the Team Submissions page showing your description. Example is attached.
+Please drop these files on Google Drive in a new subfolder under Submissions, or email to me if you're having access issues.
+Our high water mark so far is 0.62835. Team 2 - UWDS2 - is at 0.66458. I'm not sure where Team 1 is - don't know their moniker. 
+
+Of course we can't compete with the experts. But it sure it would be nice to beat UWDS2 :-)
+
+Hope this helps. Good luck!
+
+Jim
+
+==== PrepareWekaArffResultsForKaggleCsvSubmittal.R ====
+# Script to read in ARFF file created by Weka modeler,
+# strip all attributes except the predicted classification (here, "WnvPresent"),
+# add an Id column with a sequence number equal to the record number; and
+# write as a CSV file.
+
+library("foreign") # For read.arff
+wnvpTestFileNRecs <- 116293 # Records in test file supplied by Kaggle. Submission record cnt must match.
+
+arffInFilename <- "working/testWekaClassifiedXX"  # Change for your filename.
+testClassified_df <- read.arff(paste0(arffInFilename, ".arff"))
+stopifnot(nrow(testClassified_df) == wnvpTestFileNRecs)
+
+Id <- seq(1:wnvpTestFileNRecs)
+colsToKeep <- c("predicted WnvPresent")
+testClassified_df <- cbind(Id, testClassified_df[names(testClassified_df) %in% colsToKeep])
+names(testClassified_df) <- c("Id", "WnvPresent")
+# Write "No" as 0 and "Yes" as 1
+testClassified_df$WnvPresent <- ifelse(testClassified_df$WnvPresent == "No", 0, 1)
+str(testClassified_df)
+
+write.csv(testClassified_df, paste0(arffInFilename, ".csv"), row.names=FALSE)
