@@ -286,7 +286,7 @@ Perform any subsetting here so that train and test formats look the same to Weka
 
 ### Reproduction of May 17 Submittal by Pat Leahy
 
-```{r PareDownColumnsToThoseUsedInArffModeling}
+```{r PareDownColumnsToThoseUsedInArffModeling1}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
 stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
@@ -297,7 +297,7 @@ trainRecs <- combinedForModeling[1:nTrainingRecs,]
 
 Oversample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
-```{r OversampleWnvPresent}
+```{r OversampleWnvPresent1}
 oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
 nFalseObservationsToUse <- nrow(oversample_df)
 wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
@@ -321,7 +321,7 @@ str(testRecs)
 Note: Dataset rolls over to a new record if number of mosquitos reaches 50.
 TODO: Same date, same lat/long, same Species: combine the records.
 
-```{r PareDownColumnsToThoseUsedInArffModeling}
+```{r PareDownColumnsToThoseUsedInArffModeling2}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
              "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
@@ -333,7 +333,7 @@ stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 
 Oversample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
-```{r OversampleWnvPresent}
+```{r OversampleWnvPresent2}
 trainRecs <- combinedForModeling[1:nTrainingRecs,]
 oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
 nFalseObservationsToUse <- nrow(oversample_df)
@@ -353,7 +353,7 @@ write.arff(testRecs,
 str(testRecs)
 ```
 ### May 28 #2: Additional Predictor (Species bit vectors, NumMosqitos)
-```{r PareDownColumnsToThoseUsedInArffModeling}
+```{r PareDownColumnsToThoseUsedInArffModeling3}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
              "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
@@ -365,7 +365,7 @@ stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 
 Oversample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
-```{r OversampleWnvPresent}
+```{r OversampleWnvPresent3}
 
 trainRecs <- combinedForModeling[1:nTrainingRecs,]
 oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
@@ -384,8 +384,10 @@ write.arff(testRecs,
            paste0(workingSubDir, "/", "test", curMasterIdx, ".arff"), 
            eol = '\n', relation="WNVPTestDataset")
 str(testRecs)
-NumMosquitos degraded score. Left Species bit vector.
 ```
+
+NumMosquitos degraded score. Left Species bit vector.
+
 ### May 28 #3: Additional Predictor (Species bit vectors). Use SMOTE in Weka for oversampling.
 Change: use SMOTE in Weka to oversample WnvPresent. Don't undersample !WnvPresent here.
     In Weka, randomize after creating synthetic entries - they got stuffed at end
