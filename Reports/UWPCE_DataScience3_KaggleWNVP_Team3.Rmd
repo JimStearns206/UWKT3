@@ -265,8 +265,10 @@ combined_df$NearestStation <- ifelse(combined_df$Station1DistKm <= combined_df$S
 weather_df <- read.csv(paste0(dataSubDir, "/", wnvpWeatherFilename), stringsAsFactors=FALSE)
 colsToKeep <- c("Station", "Date", "Tmax", "Tmin", "Tavg", "AvgSpeed")
 weatherData <- weather_df[,names(weather_df) %in% colsToKeep]
-weatherData$Tavg <- as.integer(weatherData$Tavg)
 weatherData$Date <- as.Date(weatherData$Date, format="%Y-%m-%d")
+# Tmax and Tmin come in as type int. Tavg, however, comes in as chr.
+weatherData$Tavg <- as.integer(weatherData$Tavg)
+# So does AvgSpeed.
 weatherData$AvgSpeed <- as.numeric(weatherData$AvgSpeed)
 
 combinedWithWeather <- merge(combined_df, weatherData, 
@@ -274,14 +276,24 @@ combinedWithWeather <- merge(combined_df, weatherData,
                              all.x=TRUE)
 
 combinedWithWeather <- moveColsToLast(combinedWithWeather, "WnvPresent")
-stopifnot(nrow(combinedWithWeather) == (wnvpTrainFileNRecs + wnvpTestFileNRecs)
+stopifnot(nrow(combinedWithWeather) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+
+# Weather data does have some NA fields, but not the subset merged into train and test dset
+# Throw an exception if that ever proves not to be the case.
+stopifnot(sum(is.na(combinedWithWeather$Tmin)) == 0)
+stopifnot(sum(is.na(combinedWithWeather$Tmax)) == 0)
+stopifnot(sum(is.na(combinedWithWeather$Tavg)) == 0)
+stopifnot(sum(is.na(combinedWithWeather$AvgSpeed)) == 0)
 ```
 
 ## 1.4 Write train and test files, complete (all attributes), to CSV
 
 * Write the train and test datasets - including weather data - as CSV.
 
-```{r WriteTrainAndTestMasterDatasetsAsCvs}
+```{r WriteTrainAndTestMasterDatasetsAsCsv}
+stopifnot(sum(combinedWithWeather$DsetType == "Train") == wnvpTrainFileNRecs)
+stopifnot(sum(combinedWithWeather$DsetType == "Test") == wnvpTestFileNRecs)
+
 trainWithWeather <- combinedWithWeather[combinedWithWeather$DsetType == "Train",]
 stopifnot(nrow(trainWithWeather) == wnvpTrainFileNRecs)
 trainWithWeather$DsetType <- NULL
@@ -291,7 +303,7 @@ write.csv(trainWithWeather,
            eol = '\n')
 str(trainWithWeather)
 
-trainWithWeather <- combinedWithWeather[combinedWithWeather$DsetType == "Test",]
+testWithWeather <- combinedWithWeather[combinedWithWeather$DsetType == "Test",]
 stopifnot(nrow(testWithWeather) == wnvpTestFileNRecs)
 trainWithWeather$DsetType <- NULL
 
@@ -301,75 +313,62 @@ write.csv(testWithWeather,
 str(testWithWeather)
 ```
 
+# 1.5 Write train and test files, complete (all attributes), to ARFF
+
+```{r WriteTrainAndTestMasterDatasetsAsArff}
+write.arff(trainWithWeather, 
+           paste0(workingSubDir, "/", "train", "Master", ".arff"), 
+           eol = '\n', relation="WNVPTrainDataset")
+str(trainWithWeather)
+
+write.arff(testWithWeather, 
+           paste0(workingSubDir, "/", "test", "Master", ".arff"), 
+           eol = '\n', relation="WNVPTestDataset")
+str(testWithWeather)
+```
 
 # 2. Data Exploration and Analysis
 
 *TBD*
 
-## Create train and test datasets compatible with Weka (ARFF) and each other (same attributes)
-
-Write train and test files, complete (all attributes), in ARFF format. Use a combined "master" (all records, some attributes, both train and test records) file; write it out in two subsets (train and test), with both files in ARFF format with same ARFF header. 
-
-```{r CombineTrainAndTestForArffing}
-combined <- rbind(train_df, test_df)
-```
-
-```{r WriteMasterTrainAndTestAsCsv}
-nTrainingRecs = nrow(train_df)
-nTotalRecs = wnvpTrainFileNRecs + wnvpTestFileNRecs
-stopifnot(nrow(combinedMaster) == nTotalRecs)
-
-trainRecs <- combinedMaster[1:nTrainingRecs,]
-stopifnot(nTrainingRecs == wnvpTrainFileNRecs)
-write.csv(trainRecs, 
-           paste0(workingSubDir, "/", "train", "Master", ".csv"), 
-           eol = '\n')
-str(trainRecs)
-
-testRecs <- combinedMaster[(nTrainingRecs+1):nTotalRecs,]
-stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
-write.csv(testRecs, 
-           paste0(workingSubDir, "/", "test", "Master", ".csv"), 
-           eol = '\n')
-str(testRecs)
-```
-
 # 3. Features for Modeling
+
+*TBD*
 
 # 4. Kaggle Submissions
 
 *Insert table of submissions here*
 
-## 4.1 Reproduction of May 17 Pat Leahy Submittal
+## 4.1 Reproduction of May 17 Pat Leahy Submittal (Score 0.59642)
 
 Perform any subsetting here so that train and test formats look the same to Weka.
 
-
 ```{r PareDownColumnsToThoseUsedInArffModeling1}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
-combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
+combinedForModeling <- combinedWithWeather[,names(combinedWithWeather) %in% colsToKeep] 
 stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 ```
 
 Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
-```{r OversampleWnvPresent1}
-curMasterIdx <- "02"
-trainRecs <- combinedForModeling[1:nTrainingRecs,]
+```{r OversampleWnvPresent0517PL}
+curModelIdx <- "01"
+trainRecs <- combinedForModeling[1:wnvpTrainFileNRecs,]
 oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
 nFalseObservationsToUse <- nrow(oversample_df)
 wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
-oversample_df <- rbind(oversample_df, wnvNotPresent[sample(nrow(wnvNotPresent), nFalseObservationsToUse),])
+oversample_df <- rbind(oversample_df,
+                       wnvNotPresent[sample(nrow(wnvNotPresent), nFalseObservationsToUse),])
 
 write.arff(oversample_df, 
-           paste0(workingSubDir, "/", "train", curMasterIdx, ".arff"), 
+           paste0(workingSubDir, "/", "train", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTrainDataset")
 str(oversample_df)
 
-testRecs <- combinedForModeling[(nTrainingRecs+1):nTotalRecs,]
+testRecs <- combinedForModeling[(wnvpTrainFileNRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
 stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
 write.arff(testRecs, 
-           paste0(workingSubDir, "/", "test", curMasterIdx, ".arff"), 
+           paste0(workingSubDir, "/", "test", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTestDataset")
 str(testRecs)
 ```
@@ -379,7 +378,8 @@ str(testRecs)
 Note: Dataset rolls over to a new record if number of mosquitos reaches 50.
 TODO: Same date, same lat/long, same Species: combine the records.
 
-```{r PareDownColumnsToThoseUsedInArffModeling2}
+```{PareDownColumnsToThoseUsedInArffModeling2}
+XXXXXXXXX
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
              "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
@@ -391,8 +391,9 @@ stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 
 Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
-```{r OversampleWnvPresent2}
-curMasterIdx <- "03"
+```{OversampleWnvPresent2}
+XXXXXXXXX
+curModelIdx <- "03"
 trainRecs <- combinedForModeling[1:nTrainingRecs,]
 oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
 nFalseObservationsToUse <- nrow(oversample_df)
@@ -400,14 +401,14 @@ wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
 oversample_df <- rbind(oversample_df, wnvNotPresent[sample(nrow(wnvNotPresent), nFalseObservationsToUse),])
 
 write.arff(oversample_df, 
-           paste0(workingSubDir, "/", "train", curMasterIdx, ".arff"), 
+           paste0(workingSubDir, "/", "train", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTrainDataset")
 str(oversample_df)
 
-testRecs <- combinedForModeling[(nTrainingRecs+1):nTotalRecs,]
+testRecs <- combinedForModeling[(nTrainingRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
 stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
 write.arff(testRecs, 
-           paste0(workingSubDir, "/", "test", curMasterIdx, ".arff"), 
+           paste0(workingSubDir, "/", "test", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTestDataset")
 str(testRecs)
 ```
@@ -418,8 +419,9 @@ NumMosquitos degraded score. Left Species bit vector.
 
 Change: Add "Week". Use SMOTE in R to oversample WnvPresent.
     
-```{r DontUndersampleHere-LetWekaUseSMOTE}
-curMasterIdx <- "05"
+```{DontUndersampleHere-LetWekaUseSMOTE}
+XXXXXXXXX
+curModelIdx <- "05"
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
              "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
@@ -434,35 +436,35 @@ stopifnot(nrow(combinedMaster) == nTotalRecs)
 trainRecs <- combinedMaster[1:nTrainingRecs,]
 stopifnot(nTrainingRecs == wnvpTrainFileNRecs)
 write.csv(trainRecs, 
-           paste0(workingSubDir, "/", "train", curMasterIdx, ".csv"), 
+           paste0(workingSubDir, "/", "train", curModelIdx, ".csv"), 
            eol = '\n')
 str(trainRecs)
 
 testRecs <- combinedMaster[(nTrainingRecs+1):nTotalRecs,]
 stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
 write.csv(testRecs, 
-           paste0(workingSubDir, "/", "test", curMasterIdx, ".csv"), 
+           paste0(workingSubDir, "/", "test", curModelIdx, ".csv"), 
            eol = '\n')
 str(testRecs)
 
 # Write the combined master - train and test - as a CSV file. 
 # Good starting point for future experiments.
 write.csv(combinedMaster, 
-           paste0(workingSubDir, "/", "trainAndTest", curMasterIdx, ".csv"), 
+           paste0(workingSubDir, "/", "trainAndTest", curModelIdx, ".csv"), 
            eol = '\n')
 str(combinedMaster)
 
 trainRecs <- combinedForModeling[1:nTrainingRecs,]
 
 write.arff(trainRecs, 
-           paste0(workingSubDir, "/", "train", curMasterIdx, ".arff"), 
+           paste0(workingSubDir, "/", "train", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTrainDataset")
 str(trainRecs)
 
-testRecs <- combinedForModeling[(nTrainingRecs+1):nTotalRecs,]
+testRecs <- combinedForModeling[(nTrainingRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
 stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
 write.arff(testRecs, 
-           paste0(workingSubDir, "/", "test", curMasterIdx, ".arff"), 
+           paste0(workingSubDir, "/", "test", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTestDataset")
 str(testRecs)
 ```
@@ -561,7 +563,7 @@ File PrepareWekaArffResultsForKaggleCsvSubmittal:
 
 ```
 # Script to read in ARFF file created by Weka modeler,
-# atrip all attributes except the predicted classification (here, "WnvPresent"),
+# strip all attributes except the predicted classification (here, "WnvPresent"),
 # add an Id column with a sequence number equal to the record number; and
 # write as a CSV file.
 

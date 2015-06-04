@@ -1,7 +1,9 @@
 library(Metrics)
 library(data.table)   ## load data in quickly with fread
-x <- fread("input/train.csv")
-test <- fread("input/test.csv")
+
+# Load in versions of the input test and train datasets that have been enhanced with weather data.
+x <- fread("working/trainMaster.csv")
+test <- fread("working/testMaster.csv")
 
 ## prep the species column by moving the test-only UNSPECIFIED CULEX to CULEX ERRATICUS, and re-doing the levels
 ## logistic regression will complain otherwise
@@ -28,6 +30,14 @@ test[,dYear:=as.factor(paste(substr(test$Date,1,4)))]
 test$Date = as.Date(test$Date)
 tsDate = as.Date(paste0(test$dYear, "0101"), format="%Y%m%d")
 test$dWeek = as.numeric(paste(floor((test$Date - tsDate + 1)/7)))
+
+# WnvPresent has been converted to a two level factor: "No" and "Yes"
+# Convert back to 0 and 1
+x$WnvPresent <- ifelse(x$WnvPresent == "No", 0, 1)
+test$WnvPresent <- ifelse(test$WnvPresent == "No", 0, 1)
+
+x$AvgSpeed <- as.numeric(x$AvgSpeed)
+test$AvgSpeed <- as.numeric(test$AvgSpeed)
 
 # we'll set aside 2011 data as test, and train on the remaining
 my.x = data.frame(x[,list(WnvPresent, dWeek, Species2, Latitude, Longitude, Tavg, AvgSpeed)])
