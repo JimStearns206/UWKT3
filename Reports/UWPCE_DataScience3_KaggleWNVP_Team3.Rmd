@@ -2,14 +2,18 @@
 title: "UWPCE DataScience3 KaggleWNVP Project Report"
 author: "Kaggle Team 3"
 date: "2 June 2015"
-output: pdf_document
+output:
+    pdf_document:
+        toc: true
 geometry: margin=0.25in
 fontsize: 12pt
 mainfont: Verdana
 monofont: Consolas
 ---
 
-# Background
+# 0. Introduction
+
+## 0.1 Background
 
 WNVP: "West Nile Virus Prediction"
 
@@ -23,21 +27,20 @@ Team Goals:
 2. Learn how to participate in a Kaggle competition.
 3. Non-Goal: win the competition, or even score highly.
 
-# Team Members
+## 0.2 Team Members
 
 * Bethene Britt
 * Andrew Ewing
 * Gregory Hogue
 * Patrick Leahy
-* Michal Monselise
 * Linghua Qiu
 * Chris Ross
 * Robert Russell
 * Jim Stearns
 
-# Data Preparation
+# 1. Data Preparation
 
-## Obtain Original Datasets from Kaggle Website
+## 1.1 Obtain Original Datasets from Kaggle Website
 
 Download the training, test, spray, and weather data from the Kaggle web site page for West Nile Virus Prediction.
 
@@ -67,8 +70,12 @@ library("geosphere")
 
 # Return a data frame with the named column(s) moved to last position. 
 # Here, it will be the output classification, WnvPresent.
-moveColToLast <- function(df, colsToMove) {
+moveColsToLast <- function(df, colsToMove) {
     df[c(setdiff(names(df), colsToMove), colsToMove)]
+}
+
+moveColsToFirst <- function(df, colsToMove) {
+    df[c(colsToMove, setdiff(names(df), colsToMove))]
 }
 ```
 
@@ -161,59 +168,77 @@ stopifnot(allKaggleFilesArePresent())
 print("All unzipped Kaggle datasets found in PWD. Proceeding.")
 ```
 
-## Create train and test datasets compatible with Weka (ARFF) and each other (same attributes)
+## 1.2 Data Preparation
 
 * Read in test and train csv-format files into data frames.
 * Make the train and test datasets have the same attributes:
     * Train: Convert the WnvPresent column from numeric to factor with levels "Yes" and "No".
     * Test: Remove Id attribute.
-    * Test: Add a NumMosquitos integer column, all 0.
+    * Train: Remove NumMosquitos attribute. Potentially useful, but not available in Test dset.
     * Test: Add a WnvPresent factor column, all with "No" level.
-    
-* Combine train and test into a single data frame and transform all as follows:
-    * Remove the block attributes of little use: 
+    * Both: Remove the block attributes of little use: 
         * Address, Block, Street, AddressNumberAndStreet, AddressAccuracy.
-    * Convert the Species factor into bit vectors (a new column for each of the factor levels, with a zero or 1 value)
-    * Convert date into date format, add "Year" and "Month" attributes.
+    * Both: Add bit vectors of each of the levels of the Species factor (a new column for each of the factor levels, with a zero or 1 value). Leave the Species as well.
+    * Both: Convert date into date format, add "Year", "Month", and "Week" factor attributes.
    
-```{r WekaFilesForFirstSubmission}
+```{r CreateMasterTrainAndTestDatasets}
 train_df <- read.csv(paste0(dataSubDir, "/", wnvpTrainFilename))
-stopifnot(nrow(train_df) == wnvpTrainFileNRecs)
-train_df$WnvPresent <- as.factor(train_df$WnvPresent)
-levels(train_df$WnvPresent) <- c("No", "Yes")
-
 test_df <- read.csv(paste0(dataSubDir, "/", wnvpTestFilename))
 # Quick sanity check: got right number of records?
+stopifnot(nrow(train_df) == wnvpTrainFileNRecs)
 stopifnot(nrow(test_df) == wnvpTestFileNRecs)
-test_df$Id <- NULL
-test_df <- cbind(NumMosquitos=0, test_df)
+
+# WnvPresent. Train: convert to factor. Test: add as factor, default value of "No".
+train_df$WnvPresent <- factor(train_df$WnvPresent, labels=c("No", "Yes"))
 WnvPresent <- factor("No", levels=c("No","Yes"))
 test_df <- cbind(test_df, WnvPresent)
 
-combined <- rbind(train_df, test_df)
+# Test: Remove Id attribute.
+test_df$Id <- NULL
+# Train: Remove NumMosquitos attribute. Potentially useful, but not available in Test dset.
+train_df$NumMosquitos <- NULL
 
+# Both: Remove the block attributes of little use: 
 attrsToRemove <- c("Address", "Block", "Street", "AddressNumberAndStreet", "AddressAccuracy")
-combined <- combined[,!names(combined) %in% attrsToRemove]
+train_df <- train_df[,!names(train_df) %in% attrsToRemove]
+test_df <- test_df[,!names(test_df) %in% attrsToRemove]
 
-# Convert Species into a bit vector, one column for each factor level
-combined <- with(combined, cbind(model.matrix( ~ 0 + Species, combined), combined))
+# For creation of factor attributes, temporarily combine train and test into one dataset
+# so that factor levels are the same when both are written out as separate files.
+# Keeps Weka happy.
+# Add a temporary column distinquishing train from test dataset entries.
+train_df$DsetType <- "Train"
+test_df$DsetType <- "Test"
 
-# Tries %Y-%m-%d by default, but what the heck, explicitly state the format.
-combined$Date <- as.Date(combined$Date, format="%Y-%m-%d")
-Year <- format(combined$Date, "%Y")
-Month <- format(combined$Date, "%m")
-# Prepend year and month, leaving classification attribute in last column
-combined <- cbind(Year, Month, combined)
-# Move Date to first column, near Year and Month.
-combined <- combined[,c(11,1,2,3,4,5,6,7,8,9,10,12,13,14,15,16,17)]
-# Remove the Species attribute - replaced by bit vectors.
-combined$Species <- NULL
+combined_df = rbind(train_df, test_df)
+
+# Both (in Combined): Add bit vectors for Species, one column for each factor level
+# TODO: "UNSPECIFIED CULEX" needs attention.
+combined_df <- with(combined_df, cbind(model.matrix( ~ 0 + Species, combined_df), combined_df))
+
+# Both (in Combined): Convert date into date format, 
+# add "Year", "Month", and "Week" factor attributes.
+# as.Date() tries %Y-%m-%d by default, but what the heck, explicitly state the format.
+combined_df$Date <- as.Date(combined_df$Date, format="%Y-%m-%d")
+
+combined_df$Year <- as.factor(format(combined_df$Date, "%Y"))
+combined_df$Month <- as.factor(format(combined_df$Date, "%m"))
+combined_df$Week <- as.factor(format(combined_df$Date, "%U"))
+
+# Move temporary dsetType and date-related attributes to left, leaving WnvPresent last
+combined_df <- moveColsToFirst(combined_df, c("DsetType", "Date", "Year", "Month", "Week"))
+
+# Do not remove the Species attribute - not all models will use the bit vectors.
+#train$Species <- NULL
+#test$Species <- NULL
 ```
 
-## Distance of Trap from the Two Weather Stations
+## 1.3 Merging Weather Data with Trap Observations
 
-* Calculate the distance (using lat/long) of the trap from the two weather stations, adding attributes with the value in kilometers. Patience: This takes a while (~5 minutes).
-* Add a nearest weather station attribute.
+#### Distance of Trap from the Two Weather Stations
+
+* Both (in Combined): Calculate the distance (using lat/long) of the trap from the two weather stations, adding attributes with the value in kilometers. Patience: This takes a while (~5 minutes).
+* Both (in Combined): Add a nearest weather station attribute.
 
 Using function *distCosine* in [R Geosphere Package](http://cran.r-project.org/web/packages/geosphere/geosphere.pdf) to calculate distance on a sphere.
 
@@ -225,34 +250,71 @@ station1LongLat <- c(-87.933, 41.995)
 station2LongLat <- c(-87.752, 41.786)
 
 # Patience. This takes a while (~5 minutes)
-for (i in 1:nrow(combined)) {
-    combined$Station1DistKm[i] <- distCosine(c(combined$Longitude[i], combined$Latitude[i]), station1LongLat) / 1000
-    combined$Station2DistKm[i] <- distCosine(c(combined$Longitude[i], combined$Latitude[i]), station2LongLat) / 1000
+for (i in 1:nrow(combined_df)) {
+    combined_df$Station1DistKm[i] <- distCosine(
+        c(combined_df$Longitude[i], combined_df$Latitude[i]), station1LongLat) / 1000
+    combined_df$Station2DistKm[i] <- distCosine(
+        c(combined_df$Longitude[i], combined_df$Latitude[i]), station2LongLat) / 1000
 }
-combined$NearestStation <- ifelse(combined$Station1DistKm <= combined$Station2DistKm, 1, 2)
+combined_df$NearestStation <- ifelse(combined_df$Station1DistKm <= combined_df$Station2DistKm, 1, 2)
 ```
 
-* Merge in min, max, and average temperature from nearest station on that date.
+* Both (in Combined): Merge in temperature and wind data from nearest station on that date.
 
-```{r MinMaxAvgTemps}
-weather_df <- read.csv(paste0(dataSubDir, "/", wnvpWeatherFilename))
-colsToKeep <- c("Station", "Date", "Tmax", "Tmin", "Tavg")
-minmaxavgTemps <- weather_df[,names(weather_df) %in% colsToKeep]
-minmaxavgTemps$Tavg <- as.integer(minmaxavgTemps$Tavg)
-minmaxavgTemps$Date <- as.Date(minmaxavgTemps$Date, format="%Y-%m-%d")
+```{r WeatherData}
+weather_df <- read.csv(paste0(dataSubDir, "/", wnvpWeatherFilename), stringsAsFactors=FALSE)
+colsToKeep <- c("Station", "Date", "Tmax", "Tmin", "Tavg", "AvgSpeed")
+weatherData <- weather_df[,names(weather_df) %in% colsToKeep]
+weatherData$Tavg <- as.integer(weatherData$Tavg)
+weatherData$Date <- as.Date(weatherData$Date, format="%Y-%m-%d")
+weatherData$AvgSpeed <- as.numeric(weatherData$AvgSpeed)
 
-combinedWithTemps <- merge(combined, minmaxavgTemps, by.x=c("Date", "NearestStation"), by.y=c("Date", "Station"), all.x=TRUE)
+combinedWithWeather <- merge(combined_df, weatherData, 
+                             by.x=c("Date", "NearestStation"), by.y=c("Date", "Station"), 
+                             all.x=TRUE)
 
-combinedMaster <- moveColToLast(combinedWithTemps, "WnvPresent")
-stopifnot(nrow(combinedMaster) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+combinedWithWeather <- moveColsToLast(combinedWithWeather, "WnvPresent")
+stopifnot(nrow(combinedWithWeather) == (wnvpTrainFileNRecs + wnvpTestFileNRecs)
 ```
 
-## Write files: complete (all attributes) to CSV, latest model inputs to ARFF.
+## 1.4 Write train and test files, complete (all attributes), to CSV
 
-* Write the combined "master" (all attributes) file out in two subsets (train and test), as CSV.
+* Write the train and test datasets - including weather data - as CSV.
+
+```{r WriteTrainAndTestMasterDatasetsAsCvs}
+trainWithWeather <- combinedWithWeather[combinedWithWeather$DsetType == "Train",]
+stopifnot(nrow(trainWithWeather) == wnvpTrainFileNRecs)
+trainWithWeather$DsetType <- NULL
+
+write.csv(trainWithWeather, 
+           paste0(workingSubDir, "/", "train", "Master", ".csv"), 
+           eol = '\n')
+str(trainWithWeather)
+
+trainWithWeather <- combinedWithWeather[combinedWithWeather$DsetType == "Test",]
+stopifnot(nrow(testWithWeather) == wnvpTestFileNRecs)
+trainWithWeather$DsetType <- NULL
+
+write.csv(testWithWeather, 
+           paste0(workingSubDir, "/", "test", "Master", ".csv"), 
+           eol = '\n')
+str(testWithWeather)
+```
+
+
+# 2. Data Exploration and Analysis
+
+*TBD*
+
+## Create train and test datasets compatible with Weka (ARFF) and each other (same attributes)
+
+Write train and test files, complete (all attributes), in ARFF format. Use a combined "master" (all records, some attributes, both train and test records) file; write it out in two subsets (train and test), with both files in ARFF format with same ARFF header. 
+
+```{r CombineTrainAndTestForArffing}
+combined <- rbind(train_df, test_df)
+```
 
 ```{r WriteMasterTrainAndTestAsCsv}
-curMasterIdx = "02"  # Bump as more attributes are added
 nTrainingRecs = nrow(train_df)
 nTotalRecs = wnvpTrainFileNRecs + wnvpTestFileNRecs
 stopifnot(nrow(combinedMaster) == nTotalRecs)
@@ -260,44 +322,40 @@ stopifnot(nrow(combinedMaster) == nTotalRecs)
 trainRecs <- combinedMaster[1:nTrainingRecs,]
 stopifnot(nTrainingRecs == wnvpTrainFileNRecs)
 write.csv(trainRecs, 
-           paste0(workingSubDir, "/", "train", curMasterIdx, ".csv"), 
+           paste0(workingSubDir, "/", "train", "Master", ".csv"), 
            eol = '\n')
 str(trainRecs)
 
 testRecs <- combinedMaster[(nTrainingRecs+1):nTotalRecs,]
 stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
 write.csv(testRecs, 
-           paste0(workingSubDir, "/", "test", curMasterIdx, ".csv"), 
+           paste0(workingSubDir, "/", "test", "Master", ".csv"), 
            eol = '\n')
 str(testRecs)
-
-# Write the combined master - train and test - as a CSV file. 
-# Good starting point for future experiments.
-write.csv(combinedMaster, 
-           paste0(workingSubDir, "/", "trainAndTest", curMasterIdx, ".csv"), 
-           eol = '\n')
-str(combinedMaster)
 ```
 
-* Write the combined "master" (all records, some attributes, both train and test records) 
-file out in two subsets (train and test), with both files in ARFF format with same ARFF header. 
+# 3. Features for Modeling
+
+# 4. Kaggle Submissions
+
+*Insert table of submissions here*
+
+## 4.1 Reproduction of May 17 Pat Leahy Submittal
 
 Perform any subsetting here so that train and test formats look the same to Weka.
 
-### Reproduction of May 17 Submittal by Pat Leahy
 
 ```{r PareDownColumnsToThoseUsedInArffModeling1}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
 stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 ```
-```{r WriteMasterTrainAndTestAsArff}
-trainRecs <- combinedForModeling[1:nTrainingRecs,]
-```
 
-Oversample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
+Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
 ```{r OversampleWnvPresent1}
+curMasterIdx <- "02"
+trainRecs <- combinedForModeling[1:nTrainingRecs,]
 oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
 nFalseObservationsToUse <- nrow(oversample_df)
 wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
@@ -331,42 +389,10 @@ combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep]
 stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 ```
 
-Oversample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
+Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
 ```{r OversampleWnvPresent2}
-trainRecs <- combinedForModeling[1:nTrainingRecs,]
-oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
-nFalseObservationsToUse <- nrow(oversample_df)
-wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
-oversample_df <- rbind(oversample_df, wnvNotPresent[sample(nrow(wnvNotPresent), nFalseObservationsToUse),])
-
-write.arff(oversample_df, 
-           paste0(workingSubDir, "/", "train", curMasterIdx, ".arff"), 
-           eol = '\n', relation="WNVPTrainDataset")
-str(oversample_df)
-
-testRecs <- combinedForModeling[(nTrainingRecs+1):nTotalRecs,]
-stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
-write.arff(testRecs, 
-           paste0(workingSubDir, "/", "test", curMasterIdx, ".arff"), 
-           eol = '\n', relation="WNVPTestDataset")
-str(testRecs)
-```
-### May 28 #2: Additional Predictor (Species bit vectors, NumMosqitos)
-```{r PareDownColumnsToThoseUsedInArffModeling3}
-colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
-colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
-             "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
-             "SpeciesCULEX TARSALIS", "SpeciesCULEX TERRITANS", "SpeciesUNSPECIFIED CULEX")
-colsToKeep=c(colsToKeep, "NumMosquitos")
-combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
-stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
-```
-
-Oversample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
-
-```{r OversampleWnvPresent3}
-
+curMasterIdx <- "03"
 trainRecs <- combinedForModeling[1:nTrainingRecs,]
 oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
 nFalseObservationsToUse <- nrow(oversample_df)
@@ -388,13 +414,12 @@ str(testRecs)
 
 NumMosquitos degraded score. Left Species bit vector.
 
-### May 28 #3: Additional Predictor (Species bit vectors). Use SMOTE in Weka for oversampling.
-Change: use SMOTE in Weka to oversample WnvPresent. Don't undersample !WnvPresent here.
-    In Weka, randomize after creating synthetic entries - they got stuffed at end
-    and cause 10-fold cross validation to mess up.
+### Jun-2 #3: Additional Predictor (Week). Over-sample WnvPresent
+
+Change: Add "Week". Use SMOTE in R to oversample WnvPresent.
     
 ```{r DontUndersampleHere-LetWekaUseSMOTE}
-curMasterIdx <- "04"
+curMasterIdx <- "05"
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
              "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
@@ -442,9 +467,25 @@ write.arff(testRecs,
 str(testRecs)
 ```
 
+### June 2: Generalized Additive Model (GAM), adding Average Temperature and Speed (Andy Ewing)
+
+Submitted by Andy Ewing. Used a sample from the Kaggle WNVP forum: [baby steps: breach 0.71 with GAM](https://www.kaggle.com/c/predict-west-nile-virus/forums/t/13754/baby-steps-breach-0-71-with-gam/75935)
+
+Added weather data: daily average temperature and wind speed.
+
+```{r sourceGam}
+source("src/CurDate.R")
+```
+
+# 5. Modeling Strategy
+
+*TBD. Unclear: discuss modeling strategy here, or in discussion of submittals?*
+
+# 6. Ensemble Model Opportunities
+
 # Appendix
 
-## General Setup: Clear environment, set working directory, load libraries, utilities
+## A.1 General Setup: Clear environment, set working directory, load libraries, utilities
 
 ```{r Setup,eval=FALSE}
 ```
