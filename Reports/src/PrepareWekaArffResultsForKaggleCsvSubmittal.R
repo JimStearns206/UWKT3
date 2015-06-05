@@ -6,8 +6,11 @@
 library("foreign") # For read.arff
 wnvpTestFileNRecs <- 116293 # Records in test file supplied by Kaggle. Submission record cnt must match.
 
-arffInFilename <- "working/testWekaClassifiedXX"  # Change for your filename.
-testClassified_df <- read.arff(paste0(arffInFilename, ".arff"))
+dataSubDir <- "../Submissions/Submission_0604_JS_1/" # Modify as needed
+fileBaseName <- "test0528JS_WekaClassified"  # Change for your filename. Note: no suffix.
+
+fileBasePath <- paste0(dataSubDir, fileBaseName)
+testClassified_df <- read.arff(paste0(fileBasePath, ".arff"))
 stopifnot(nrow(testClassified_df) == wnvpTestFileNRecs)
 
 Id <- seq(1:wnvpTestFileNRecs)
@@ -18,4 +21,4 @@ names(testClassified_df) <- c("Id", "WnvPresent")
 testClassified_df$WnvPresent <- ifelse(testClassified_df$WnvPresent == "No", 0, 1)
 str(testClassified_df)
 
-write.csv(testClassified_df, paste0(arffInFilename, ".csv"), row.names=FALSE)
+write.csv(testClassified_df, paste0(fileBasePath, ".csv"), row.names=FALSE)

@@ -1,7 +1,7 @@
 ---
-title: "UWPCE DataScience3 KaggleWNVP Project Report"
-author: "Kaggle Team 3"
-date: "2 June 2015"
+title: "Kaggle West Nile Virus Competition"
+author: "Team UWKT3"
+date: "9 June 2015"
 output:
     pdf_document:
         toc: true
@@ -10,24 +10,27 @@ fontsize: 12pt
 mainfont: Verdana
 monofont: Consolas
 ---
-
 # 0. Introduction
+
+The culminating project of the Spring 2015 UW PCE Data Science course "Data at Scale" was to participate in a Kaggle data science competition. Instructor Dr. Barga chose the [West Nile Virus Prediction](https://www.kaggle.com/c/predict-west-nile-virus) competition.
+
+The class was broken up into three teams of roughly 8 students. This is the report of the third team with the Kaggle name of UWKT3.
 
 ## 0.1 Background
 
-WNVP: "West Nile Virus Prediction"
+The West Nile Virus Prediction (WNVP) competition's goal was to "Predict West Nile virus in mosquitos across the city of Chicago.":
 
-[URL of Kaggle Competition](https://www.kaggle.com/c/predict-west-nile-virus).
+![KaggleWnvpHomePage](screenshots/KaggleWnvpHomePage.png)
 
-Goal of Competition: "Predict West Nile virus in mosquitos across the city of Chicago"
+The WNVP contest started on April 22nd and will end 17 June 2015. UWKT3's first submission was on May 12th. Its last so far was on June 4th.
 
-Team Goals:
+## 0.2 Team Goals
 
 1. Experiment with modelling alternative on a real-world dataset.
 2. Learn how to participate in a Kaggle competition.
 3. Non-Goal: win the competition, or even score highly.
 
-## 0.2 Team Members
+## 0.3 Team Members
 
 * Bethene Britt
 * Andrew Ewing
@@ -39,6 +42,8 @@ Team Goals:
 * Jim Stearns
 
 # 1. Data Preparation
+
+A goal of the team project was to create a "golden" train and test dataset that could form the basis of many modeling experiments.
 
 ## 1.1 Obtain Original Datasets from Kaggle Website
 
@@ -168,22 +173,22 @@ stopifnot(allKaggleFilesArePresent())
 print("All unzipped Kaggle datasets found in PWD. Proceeding.")
 ```
 
-## 1.2 Data Preparation
+## 1.2 Read Kaggle Train/Test Files, Convert Existing Features, Add New Features
 
 * Read in test and train csv-format files into data frames.
 * Make the train and test datasets have the same attributes:
     * Train: Convert the WnvPresent column from numeric to factor with levels "Yes" and "No".
-    * Test: Remove Id attribute.
+    * Train: Add an Id attribute, set to zero.
     * Train: Remove NumMosquitos attribute. Potentially useful, but not available in Test dset.
     * Test: Add a WnvPresent factor column, all with "No" level.
-    * Both: Remove the block attributes of little use: 
+    * Both: Remove the address attributes of little use compared to Lat/Long: 
         * Address, Block, Street, AddressNumberAndStreet, AddressAccuracy.
     * Both: Add bit vectors of each of the levels of the Species factor (a new column for each of the factor levels, with a zero or 1 value). Leave the Species as well.
     * Both: Convert date into date format, add "Year", "Month", and "Week" factor attributes.
    
 ```{r CreateMasterTrainAndTestDatasets}
-train_df <- read.csv(paste0(dataSubDir, "/", wnvpTrainFilename))
 test_df <- read.csv(paste0(dataSubDir, "/", wnvpTestFilename))
+train_df <- read.csv(paste0(dataSubDir, "/", wnvpTrainFilename))
 # Quick sanity check: got right number of records?
 stopifnot(nrow(train_df) == wnvpTrainFileNRecs)
 stopifnot(nrow(test_df) == wnvpTestFileNRecs)
@@ -193,8 +198,10 @@ train_df$WnvPresent <- factor(train_df$WnvPresent, labels=c("No", "Yes"))
 WnvPresent <- factor("No", levels=c("No","Yes"))
 test_df <- cbind(test_df, WnvPresent)
 
-# Test: Remove Id attribute.
-test_df$Id <- NULL
+# Train: Add Id attribute to match that in Test. Set to 0. Id in Test is 1-relative.
+train_df["Id"] <- 0
+train_df <- moveColsToFirst(train_df, "Id")
+
 # Train: Remove NumMosquitos attribute. Potentially useful, but not available in Test dset.
 train_df$NumMosquitos <- NULL
 
@@ -226,23 +233,23 @@ combined_df$Month <- as.factor(format(combined_df$Date, "%m"))
 combined_df$Week <- as.factor(format(combined_df$Date, "%U"))
 
 # Move temporary dsetType and date-related attributes to left, leaving WnvPresent last
-combined_df <- moveColsToFirst(combined_df, c("DsetType", "Date", "Year", "Month", "Week"))
+combined_df <- moveColsToFirst(combined_df, c("DsetType", "Id", "Date", "Year", "Month", "Week"))
 
 # Do not remove the Species attribute - not all models will use the bit vectors.
 #train$Species <- NULL
 #test$Species <- NULL
 ```
 
-## 1.3 Merging Weather Data with Trap Observations
+## 1.3 Merge Weather Data with Trap Observations in Train/Test Datasets
 
-#### Distance of Trap from the Two Weather Stations
+### Calculate Distance of Trap from the Two Weather Stations
 
 * Both (in Combined): Calculate the distance (using lat/long) of the trap from the two weather stations, adding attributes with the value in kilometers. Patience: This takes a while (~5 minutes).
 * Both (in Combined): Add a nearest weather station attribute.
 
 Using function *distCosine* in [R Geosphere Package](http://cran.r-project.org/web/packages/geosphere/geosphere.pdf) to calculate distance on a sphere.
 
-```{r WeatherStationDistances}
+```{r WeatherStationDistances, cache=TRUE} 
 # Station 1: O'Hare
 station1LongLat <- c(-87.933, 41.995)
     
@@ -256,12 +263,13 @@ for (i in 1:nrow(combined_df)) {
     combined_df$Station2DistKm[i] <- distCosine(
         c(combined_df$Longitude[i], combined_df$Latitude[i]), station2LongLat) / 1000
 }
-combined_df$NearestStation <- ifelse(combined_df$Station1DistKm <= combined_df$Station2DistKm, 1, 2)
+combined_df$NearestStation <- ifelse(
+    combined_df$Station1DistKm <= combined_df$Station2DistKm, 1, 2)
 ```
 
 * Both (in Combined): Merge in temperature and wind data from nearest station on that date.
 
-```{r WeatherData}
+```{r MergeWeatherData}
 weather_df <- read.csv(paste0(dataSubDir, "/", wnvpWeatherFilename), stringsAsFactors=FALSE)
 colsToKeep <- c("Station", "Date", "Tmax", "Tmin", "Tavg", "AvgSpeed")
 weatherData <- weather_df[,names(weather_df) %in% colsToKeep]
@@ -271,19 +279,23 @@ weatherData$Tavg <- as.integer(weatherData$Tavg)
 # So does AvgSpeed.
 weatherData$AvgSpeed <- as.numeric(weatherData$AvgSpeed)
 
-combinedWithWeather <- merge(combined_df, weatherData, 
+combinedww <- merge(combined_df, weatherData, 
                              by.x=c("Date", "NearestStation"), by.y=c("Date", "Station"), 
                              all.x=TRUE)
+#str(combinedww)
 
-combinedWithWeather <- moveColsToLast(combinedWithWeather, "WnvPresent")
-stopifnot(nrow(combinedWithWeather) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+# Make "Id" the first column and "WnvPresent" the last.
+combinedww <- moveColsToFirst(combinedww, "Id")
+combinedww <- moveColsToLast(combinedww, "WnvPresent")
+
+stopifnot(nrow(combinedww) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 
 # Weather data does have some NA fields, but not the subset merged into train and test dset
 # Throw an exception if that ever proves not to be the case.
-stopifnot(sum(is.na(combinedWithWeather$Tmin)) == 0)
-stopifnot(sum(is.na(combinedWithWeather$Tmax)) == 0)
-stopifnot(sum(is.na(combinedWithWeather$Tavg)) == 0)
-stopifnot(sum(is.na(combinedWithWeather$AvgSpeed)) == 0)
+stopifnot(sum(is.na(combinedww$Tmin)) == 0)
+stopifnot(sum(is.na(combinedww$Tmax)) == 0)
+stopifnot(sum(is.na(combinedww$Tavg)) == 0)
+stopifnot(sum(is.na(combinedww$AvgSpeed)) == 0)
 ```
 
 ## 1.4 Write train and test files, complete (all attributes), to CSV
@@ -291,10 +303,10 @@ stopifnot(sum(is.na(combinedWithWeather$AvgSpeed)) == 0)
 * Write the train and test datasets - including weather data - as CSV.
 
 ```{r WriteTrainAndTestMasterDatasetsAsCsv}
-stopifnot(sum(combinedWithWeather$DsetType == "Train") == wnvpTrainFileNRecs)
-stopifnot(sum(combinedWithWeather$DsetType == "Test") == wnvpTestFileNRecs)
+stopifnot(sum(combinedww$DsetType == "Train") == wnvpTrainFileNRecs)
+stopifnot(sum(combinedww$DsetType == "Test") == wnvpTestFileNRecs)
 
-trainWithWeather <- combinedWithWeather[combinedWithWeather$DsetType == "Train",]
+trainWithWeather <- combinedww[combinedww$DsetType == "Train",]
 stopifnot(nrow(trainWithWeather) == wnvpTrainFileNRecs)
 trainWithWeather$DsetType <- NULL
 
@@ -303,28 +315,16 @@ write.csv(trainWithWeather,
            eol = '\n')
 str(trainWithWeather)
 
-testWithWeather <- combinedWithWeather[combinedWithWeather$DsetType == "Test",]
+testWithWeather <- combinedww[combinedww$DsetType == "Test",]
 stopifnot(nrow(testWithWeather) == wnvpTestFileNRecs)
+# Make sure test dataset is still ordered by Id
+testWithWeather <- testWithWeather[order(testWithWeather$Id),]
 trainWithWeather$DsetType <- NULL
 
 write.csv(testWithWeather, 
            paste0(workingSubDir, "/", "test", "Master", ".csv"), 
            eol = '\n')
-str(testWithWeather)
-```
-
-# 1.5 Write train and test files, complete (all attributes), to ARFF
-
-```{r WriteTrainAndTestMasterDatasetsAsArff}
-write.arff(trainWithWeather, 
-           paste0(workingSubDir, "/", "train", "Master", ".arff"), 
-           eol = '\n', relation="WNVPTrainDataset")
-str(trainWithWeather)
-
-write.arff(testWithWeather, 
-           paste0(workingSubDir, "/", "test", "Master", ".arff"), 
-           eol = '\n', relation="WNVPTestDataset")
-str(testWithWeather)
+#str(testWithWeather)
 ```
 
 # 2. Data Exploration and Analysis
@@ -337,33 +337,112 @@ str(testWithWeather)
 
 # 4. Kaggle Submissions
 
-*Insert table of submissions here*
+![UWKT3 Kaggle Submissions](screenshots/UWKT3_WnvpSubmittals.png)
 
-## 4.1 Reproduction of May 17 Pat Leahy Submittal (Score 0.59642)
+## 4.1 May 17 Pat Leahy Submittal (Decision Tree, Score 0.59642)
+
+Pat's summary of data preparation, feature selection, and model:
+
+### Data Preparation
+
+We joined the weather data provided by Kaggle to the training and test records. 
+This resulted in two new tables which contained the test and training data 
+along with a set of weather attributes from the nearest weather station for the 
+date in question.
+
+We carried out our data preparation in Excel. We copied the files train.csv, 
+test.csv and weather.csv into tabs in an Excel workbook. There were two weather 
+stations in the weather data. We calculated the distance from each observation 
+point to each of the two weather stations. We used an Excel macro copied from 
+http://www.codecodex.com/wiki/Calculate_distance_between_two_points_on_a_globe#E
+xcel to calculate the distances given latitude and longitude. We then 
+determined which weather station was closer to each point. We used the weather 
+station ID and date as a key to join test and training records to the weather 
+records. We used Excels VLOOKUP function to implement a join.
+
+### Feature Selection
+
+Once we had the training and test data joined to the weather data we selected 
+some features to generate a model. A team member studied mosquitos and reported 
+the following
+
+"Culex mosquitoes lay their eggs usually at night on the surface of fresh or 
+stagnant water; usually lay their eggs at night; a mosquito may lay a raft of 
+eggs every third night during its life span.
+
+Culex usually live only a few weeks during the warm summer months; those 
+females which emerge in late summer search for sheltered areas where they 
+hibernate (diapause) until spring; warm weather brings them out in search of 
+water on which to lay their eggs. "
+
+Given this knowledge we selected the Month as a feature.
+
+Chicago has one large body of water with a coastline which runs in 
+approximately a straight line. We therefore concluded that Latitude and 
+Longitude would also be useful features.
+
+We also selected three temperature measures from the weather data. They were 
+Minimum Temperature, Maximum Temperature and Average Temperature. We selected 
+these temperature features because they didn't contain any missing values.
+
+The full set of features we selected were Latitude, Longitude, Month, Minimum 
+Temperature, Maximum Temperature and Average Temperature.
+
+### Model
+
+We decided to over sample the test data to include the same number of positive 
+observations for West Nile Virus as negative observations. We did this by 
+selecting all the positive observations together with an equal number of 
+negative observations randomly selected. We carried out the random selection in 
+Excel by adding a new column of randomly generated values using the RAND 
+function and then sorting using that column. We created two new CSV files, a 
+training and test file, containing only our selected features. The training set 
+only contained the equally represented subset of positive and negative 
+observations.
+
+We opened the training set in Weka and generated a Decision Tree using the J48 
+classifier. We tuned some of the parameters until we settled on the following 
+settings, "-C 0.5 -M 2". We had to reformat the class column in the training 
+file to be Yes/No instead for 1/0 for Weka to recognize it as a class.
+We then used the test.csv we created with only our specific features. We had 
+some difficulty using the test file until we added a class column. This we just 
+set to No for all records.
+
+Weka failed to run the model if we tried to output the results of the test to a 
+file regardless of the file type. To work around this we turned off output to a 
+file. Instead we right clicked on the results in the result list and selected 
+"Visualize classification errors". We could then save the predictions in the 
+window which opened as an ARFF file. We converted this to a CSV, changed some 
+of the columns and this gave me a submission file to upload to Kaggle.
+We uploaded this submission and achieved an accuracy of 0.59642. This is better 
+than the accuracy of 0.5 we achieved when prediction no West Nile Virus for 
+every test record.
+
+### Reproduce ARFF datasets for Use in Weka
 
 Perform any subsetting here so that train and test formats look the same to Weka.
 
 ```{r PareDownColumnsToThoseUsedInArffModeling1}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
-combinedForModeling <- combinedWithWeather[,names(combinedWithWeather) %in% colsToKeep] 
+combinedForModeling <- combinedww[,names(combinedww) %in% colsToKeep] 
 stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 ```
 
 Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
-```{r OversampleWnvPresent0517PL}
-curModelIdx <- "01"
+```{r UndersampleWnvPresent0517PL}
+curModelIdx <- "0517PL"
 trainRecs <- combinedForModeling[1:wnvpTrainFileNRecs,]
-oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
-nFalseObservationsToUse <- nrow(oversample_df)
+undersample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
+nFalseObservationsToUse <- nrow(undersample_df)
 wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
-oversample_df <- rbind(oversample_df,
+undersample_df <- rbind(undersample_df,
                        wnvNotPresent[sample(nrow(wnvNotPresent), nFalseObservationsToUse),])
 
-write.arff(oversample_df, 
+write.arff(undersample_df, 
            paste0(workingSubDir, "/", "train", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTrainDataset")
-str(oversample_df)
+str(undersample_df)
 
 testRecs <- combinedForModeling[(wnvpTrainFileNRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
 stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
@@ -373,111 +452,81 @@ write.arff(testRecs,
 str(testRecs)
 ```
 
-### May 28: Additional Predictors (Species bit vectors, NumMosqitos)
+### Screenshot of Leaderboard
 
-Note: Dataset rolls over to a new record if number of mosquitos reaches 50.
+![May 17 Pat Leahy Submittal](../Submissions/Submission_0517_PL/Screenshot_UWKT3_Leaderboard_Submission20150517_BB.png)
+
+## 4.2 May 28 Jim Stearns Submittal (Decision Tree, Score 0.62835)
+
+Based upon May 17 Pat Leahy Submittal (Score 0.59642), with one additional predictor: Species bit vectors.
+
+Input: 
+    Attributes: Lat/Long, Month, Tmin/Tmax/Tavg, Species bit vectors.
+    Classified Attribute: WnvPresent
+    Observations: all WnvPresent records, 
+        an equal number of !WnvPresent records, randomly sampled.
+        
+Output: train and test datasets in ARFF format for modeling in Weka.
+
+Discussion: NumMosquitos degraded score. It's not an attribute in test dataset. Not using.
+
+Limitations: Dataset rolls over to a new record if number of mosquitos reaches 50.
 TODO: Same date, same lat/long, same Species: combine the records.
 
-```{PareDownColumnsToThoseUsedInArffModeling2}
-XXXXXXXXX
+```{r PareDownColumnsToThoseUsedInArffModeling0528JS}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
              "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
              "SpeciesCULEX TARSALIS", "SpeciesCULEX TERRITANS", "SpeciesUNSPECIFIED CULEX")
-colsToKeep=c(colsToKeep, "NumMosquitos")
-combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
+combinedForModeling <- combinedww[,names(combinedww) %in% colsToKeep] 
 stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
 ```
 
-Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
+Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the training data set.
 
-```{OversampleWnvPresent2}
-XXXXXXXXX
-curModelIdx <- "03"
-trainRecs <- combinedForModeling[1:nTrainingRecs,]
-oversample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
-nFalseObservationsToUse <- nrow(oversample_df)
-wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
-oversample_df <- rbind(oversample_df, wnvNotPresent[sample(nrow(wnvNotPresent), nFalseObservationsToUse),])
+```{r UnderSampleNotWnvPresent0528JS}
+curModelIdx <- "0528JS"
+trainRecs <- combinedForModeling[1:wnvpTrainFileNRecs,]
+allWnvPresentTrainRecs <- trainRecs[trainRecs$WnvPresent=="Yes",]
+nFalseObservationsToUse <- nrow(allWnvPresentTrainRecs)
+allNotWnvPresentTrainRecs <- trainRecs[trainRecs$WnvPresent=="No",]
+sampleNotWnvPresentTrainRecs <- allNotWnvPresentTrainRecs[
+    sample(nrow(allNotWnvPresentTrainRecs), nFalseObservationsToUse),]
 
-write.arff(oversample_df, 
+train_0528JS <- rbind(allWnvPresentTrainRecs, sampleNotWnvPresentTrainRecs)
+write.arff(train_0528JS, 
            paste0(workingSubDir, "/", "train", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTrainDataset")
-str(oversample_df)
+str(train_0528JS)
 
-testRecs <- combinedForModeling[(nTrainingRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
+# Write all the test recs
+testRecs <- combinedForModeling[(wnvpTrainFileNRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
 stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
 write.arff(testRecs, 
            paste0(workingSubDir, "/", "test", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTestDataset")
-str(testRecs)
+#str(testRecs)
 ```
 
-NumMosquitos degraded score. Left Species bit vector.
+### Screenshot of Leaderboard
 
-### Jun-2 #3: Additional Predictor (Week). Over-sample WnvPresent
+![May 28 Jim Stearns Submittal](../Submissions/Submission_0528_JS_2/Submission_0528_JS_2_Leaderboard.png)
 
-Change: Add "Week". Use SMOTE in R to oversample WnvPresent.
-    
-```{DontUndersampleHere-LetWekaUseSMOTE}
-XXXXXXXXX
-curModelIdx <- "05"
-colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
-colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
-             "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
-             "SpeciesCULEX TARSALIS", "SpeciesCULEX TERRITANS", "SpeciesUNSPECIFIED CULEX")
-combinedForModeling <- combinedMaster[,names(combinedMaster) %in% colsToKeep] 
-stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
-
-nTrainingRecs = nrow(train_df)
-nTotalRecs = wnvpTrainFileNRecs + wnvpTestFileNRecs
-stopifnot(nrow(combinedMaster) == nTotalRecs)
-
-trainRecs <- combinedMaster[1:nTrainingRecs,]
-stopifnot(nTrainingRecs == wnvpTrainFileNRecs)
-write.csv(trainRecs, 
-           paste0(workingSubDir, "/", "train", curModelIdx, ".csv"), 
-           eol = '\n')
-str(trainRecs)
-
-testRecs <- combinedMaster[(nTrainingRecs+1):nTotalRecs,]
-stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
-write.csv(testRecs, 
-           paste0(workingSubDir, "/", "test", curModelIdx, ".csv"), 
-           eol = '\n')
-str(testRecs)
-
-# Write the combined master - train and test - as a CSV file. 
-# Good starting point for future experiments.
-write.csv(combinedMaster, 
-           paste0(workingSubDir, "/", "trainAndTest", curModelIdx, ".csv"), 
-           eol = '\n')
-str(combinedMaster)
-
-trainRecs <- combinedForModeling[1:nTrainingRecs,]
-
-write.arff(trainRecs, 
-           paste0(workingSubDir, "/", "train", curModelIdx, ".arff"), 
-           eol = '\n', relation="WNVPTrainDataset")
-str(trainRecs)
-
-testRecs <- combinedForModeling[(nTrainingRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
-stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
-write.arff(testRecs, 
-           paste0(workingSubDir, "/", "test", curModelIdx, ".arff"), 
-           eol = '\n', relation="WNVPTestDataset")
-str(testRecs)
-```
-
-### June 2: Generalized Additive Model (GAM), adding Average Temperature and Speed (Andy Ewing)
+## 4.3 June 2 Andy Ewing Submittal (Generalized Additive Model (GAM), Score 0.71862)
 
 Submitted by Andy Ewing. Used a sample from the Kaggle WNVP forum: [baby steps: breach 0.71 with GAM](https://www.kaggle.com/c/predict-west-nile-virus/forums/t/13754/baby-steps-breach-0-71-with-gam/75935)
 
 Added weather data: daily average temperature and wind speed.
 
-```{r sourceGam}
-source("src/CurDate.R")
+Modeling is done in R, not Weka.
+
+```{r sourceGam, cache=TRUE}
+source("src/starter_GAM.R", echo=TRUE, verbose=FALSE, print.eval=FALSE)
 ```
+
+### Screenshot of Leaderboard
+
+![June 2 Andy Ewing Submittal](../Submissions/Submission_0602_AE_71862/ewingSubmission2_Leaderboard.jpg)
 
 # 5. Modeling Strategy
 
@@ -492,7 +541,7 @@ source("src/CurDate.R")
 ```{r Setup,eval=FALSE}
 ```
 
-## Dataset download and unpacking
+## A.2 Dataset download and unpacking
 
 This R and Python code downloads the WNVP datasets from Kaggle. 
 Some setup is required:
@@ -555,9 +604,7 @@ def Download(url, username, password, local_filename):
         return(False)
 ```
 
-## Miscellaneous
-
-### Prepare Weka results as ARFF file as submittal file to Kaggle as CSV.
+## A.3 Prepare Weka results as ARFF file as submittal file to Kaggle as CSV
 
 File PrepareWekaArffResultsForKaggleCsvSubmittal: 
 
@@ -567,9 +614,14 @@ File PrepareWekaArffResultsForKaggleCsvSubmittal:
 # add an Id column with a sequence number equal to the record number; and
 # write as a CSV file.
 
+library("foreign") # For read.arff
 wnvpTestFileNRecs <- 116293 # Records in test file supplied by Kaggle. Submission record cnt must match.
-arffInFilename <- "working/testClassified02"
-testClassified_df <- read.arff(paste0(arffInFilename, ".arff"))
+
+dataSubDir <- "../Submissions/Submission_0604_JS_1/" # Modify as needed
+fileBaseName <- "test0528JS_WekaClassified"  # Change for your filename. Note: no suffix.
+
+fileBasePath <- paste0(dataSubDir, fileBaseName)
+testClassified_df <- read.arff(paste0(fileBasePath, ".arff"))
 stopifnot(nrow(testClassified_df) == wnvpTestFileNRecs)
 
 Id <- seq(1:wnvpTestFileNRecs)
@@ -580,28 +632,5 @@ names(testClassified_df) <- c("Id", "WnvPresent")
 testClassified_df$WnvPresent <- ifelse(testClassified_df$WnvPresent == "No", 0, 1)
 str(testClassified_df)
 
-write.csv(testClassified_df, paste0(arffInFilename, ".csv"), row.names=FALSE)
-```
-*NOT USED*
-
-[Distance function by "Curlew"](https://conservationecology.wordpress.com/2013/06/30/distance-between-two-points-in-r/)
-
-```{r SphericalSurfaceDistanceFunction}
-# From https://conservationecology.wordpress.com/2013/06/30/distance-between-two-points-in-r/
-# Calculate distance in kilometers between two points
-earth.dist <- function (long1, lat1, long2, lat2)
-{
-    rad <- pi/180
-    a1 <- lat1 * rad
-    a2 <- long1 * rad
-    b1 <- lat2 * rad
-    b2 <- long2 * rad
-    dlon <- b2 - a2
-    dlat <- b1 - a1
-    a <- (sin(dlat/2))^2 + cos(a1) * cos(b1) * (sin(dlon/2))^2
-    c <- 2 * atan2(sqrt(a), sqrt(1 - a))
-    R <- 6378.145
-    d <- R * c
-    return(d)
-}
+write.csv(testClassified_df, paste0(fileBasePath, ".csv"), row.names=FALSE)
 ```

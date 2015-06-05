@@ -5,6 +5,11 @@ library(data.table)   ## load data in quickly with fread
 x <- fread("working/trainMaster.csv")
 test <- fread("working/testMaster.csv")
 
+# WnvPresent in master datasets has been converted to a two level factor: "No" and "Yes".
+# (easier for decision trees). Convert back to 0 and 1.
+x$WnvPresent <- ifelse(x$WnvPresent == "No", 0, 1)
+test$WnvPresent <- ifelse(test$WnvPresent == "No", 0, 1)
+
 ## prep the species column by moving the test-only UNSPECIFIED CULEX to CULEX ERRATICUS, and re-doing the levels
 ## logistic regression will complain otherwise
 vSpecies<-c(as.character(x$Species),as.character(test$Species))
@@ -31,14 +36,6 @@ test$Date = as.Date(test$Date)
 tsDate = as.Date(paste0(test$dYear, "0101"), format="%Y%m%d")
 test$dWeek = as.numeric(paste(floor((test$Date - tsDate + 1)/7)))
 
-# WnvPresent has been converted to a two level factor: "No" and "Yes"
-# Convert back to 0 and 1
-x$WnvPresent <- ifelse(x$WnvPresent == "No", 0, 1)
-test$WnvPresent <- ifelse(test$WnvPresent == "No", 0, 1)
-
-x$AvgSpeed <- as.numeric(x$AvgSpeed)
-test$AvgSpeed <- as.numeric(test$AvgSpeed)
-
 # we'll set aside 2011 data as test, and train on the remaining
 my.x = data.frame(x[,list(WnvPresent, dWeek, Species2, Latitude, Longitude, Tavg, AvgSpeed)])
 x1<-my.x[x$dYear!=2011,]
@@ -61,4 +58,4 @@ summary(pSubmit)
 submissionFile<-cbind(test$Id,pSubmit)
 colnames(submissionFile)<-c("Id","WnvPresent")
 options("scipen"=100, "digits"=8)
-write.csv(submissionFile,"submitGAM.csv",row.names=FALSE,quote=FALSE)
+write.csv(submissionFile, paste0("working/", "submitGAM.csv"), row.names=FALSE, quote=FALSE)
