@@ -74,7 +74,7 @@ stopifnot(require("geosphere"))
 library("geosphere")
 
 # Return a data frame with the named column(s) moved to last position. 
-# Here, it will be the output classification, WnvPresent.
+# Intended usage: move the output classification, WnvPresent, to the last column position.
 moveColsToLast <- function(df, colsToMove) {
     df[c(setdiff(names(df), colsToMove), colsToMove)]
 }
@@ -173,9 +173,20 @@ stopifnot(allKaggleFilesArePresent())
 print("All unzipped Kaggle datasets found in PWD. Proceeding.")
 ```
 
-## 1.2 Read Kaggle Train/Test Files, Convert Existing Features, Add New Features
+## 1.2 Read Kaggle Train/Test Files
 
 * Read in test and train csv-format files into data frames.
+
+```{r CreateMasterTrainAndTestDatasets}
+test_df <- read.csv(paste0(dataSubDir, "/", wnvpTestFilename))
+train_df <- read.csv(paste0(dataSubDir, "/", wnvpTrainFilename))
+# Quick sanity check: got right number of records?
+stopifnot(nrow(train_df) == wnvpTrainFileNRecs)
+stopifnot(nrow(test_df) == wnvpTestFileNRecs)
+```
+
+## 1.3 Feature Selection/Creation
+
 * Make the train and test datasets have the same attributes:
     * Train: Convert the WnvPresent column from numeric to factor with levels "Yes" and "No".
     * Train: Add an Id attribute, set to zero.
@@ -186,12 +197,7 @@ print("All unzipped Kaggle datasets found in PWD. Proceeding.")
     * Both: Add bit vectors of each of the levels of the Species factor (a new column for each of the factor levels, with a zero or 1 value). Leave the Species as well.
     * Both: Convert date into date format, add "Year", "Month", and "Week" factor attributes.
    
-```{r CreateMasterTrainAndTestDatasets}
-test_df <- read.csv(paste0(dataSubDir, "/", wnvpTestFilename))
-train_df <- read.csv(paste0(dataSubDir, "/", wnvpTrainFilename))
-# Quick sanity check: got right number of records?
-stopifnot(nrow(train_df) == wnvpTrainFileNRecs)
-stopifnot(nrow(test_df) == wnvpTestFileNRecs)
+```{r FeatureFixupAndCreation}
 
 # WnvPresent. Train: convert to factor. Test: add as factor, default value of "No".
 train_df$WnvPresent <- factor(train_df$WnvPresent, labels=c("No", "Yes"))
@@ -240,7 +246,7 @@ combined_df <- moveColsToFirst(combined_df, c("DsetType", "Id", "Date", "Year", 
 #test$Species <- NULL
 ```
 
-## 1.3 Merge Weather Data with Trap Observations in Train/Test Datasets
+## 1.4 Feature Creation (ctd): Merge Weather Data with Trap Observations in Train/Test Datasets
 
 ### Calculate Distance of Trap from the Two Weather Stations
 
@@ -289,16 +295,20 @@ combinedww <- moveColsToFirst(combinedww, "Id")
 combinedww <- moveColsToLast(combinedww, "WnvPresent")
 
 stopifnot(nrow(combinedww) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+```
 
-# Weather data does have some NA fields, but not the subset merged into train and test dset
-# Throw an exception if that ever proves not to be the case.
+Weather data does have some NA fields (warning above: "Warning: NAs introduced by coercion"), 
+but not the subset merged into train and test dset.
+Throw an exception if that ever proves not to be the case.
+
+```{r StopIfWeatherDataUsedContainsNA}
 stopifnot(sum(is.na(combinedww$Tmin)) == 0)
 stopifnot(sum(is.na(combinedww$Tmax)) == 0)
 stopifnot(sum(is.na(combinedww$Tavg)) == 0)
 stopifnot(sum(is.na(combinedww$AvgSpeed)) == 0)
 ```
 
-## 1.4 Write train and test files, complete (all attributes), to CSV
+## 1.5 Write "master" train and test files, complete (all attributes), to CSV and ARFF
 
 * Write the train and test datasets - including weather data - as CSV.
 
@@ -325,6 +335,19 @@ write.csv(testWithWeather,
            paste0(workingSubDir, "/", "test", "Master", ".csv"), 
            eol = '\n')
 #str(testWithWeather)
+```
+
+* Write ARFF versions as well. Advantage over CSV: levels of factors are maintained,
+even if no observations have that level. CSV builds levels from usage.
+
+```{r WriteTrainAndTestMasterDatasetsAsArff}
+write.arff(trainWithWeather, 
+           paste0(workingSubDir, "/", "train", "Master", ".arff"), 
+           eol = '\n')
+
+write.arff(testWithWeather, 
+           paste0(workingSubDir, "/", "test", "Master", ".arff"), 
+           eol = '\n')
 ```
 
 # 2. Data Exploration and Analysis
@@ -418,21 +441,30 @@ We uploaded this submission and achieved an accuracy of 0.59642. This is better
 than the accuracy of 0.5 we achieved when prediction no West Nile Virus for 
 every test record.
 
-### Reproduce ARFF datasets for Use in Weka
+### Reproduce ARFF datasets for Use as Model Input in Weka
+
+Read in the train and test golden "Master" datasets. Use the ARFF versions so that the factor types are preserved with the same levels, even if some levels are not present in any record
+in the file.
+
+```{r 0517PLReadInMaster}
+trainRecs <- read.arff(paste0(workingSubDir, "/", "train", "Master", ".arff"))
+testRecs <- read.arff(paste0(workingSubDir, "/", "test", "Master", ".arff"))
+stopifnot(nrow(trainRecs) == wnvpTrainFileNRecs)
+stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
+```
 
 Perform any subsetting here so that train and test formats look the same to Weka.
 
-```{r PareDownColumnsToThoseUsedInArffModeling1}
+```{r PareDownColumnsToThoseUsedIn0517PLModeling}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
-combinedForModeling <- combinedww[,names(combinedww) %in% colsToKeep] 
-stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+trainRecs <- trainRecs [,names(trainRecs) %in% colsToKeep] 
+testRecs <- testRecs [,names(testRecs) %in% colsToKeep] 
 ```
 
 Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the test data set.
 
 ```{r UndersampleWnvPresent0517PL}
 curModelIdx <- "0517PL"
-trainRecs <- combinedForModeling[1:wnvpTrainFileNRecs,]
 undersample_df <- trainRecs[trainRecs$WnvPresent=="Yes",]
 nFalseObservationsToUse <- nrow(undersample_df)
 wnvNotPresent <- trainRecs[trainRecs$WnvPresent=="No",]
@@ -444,8 +476,6 @@ write.arff(undersample_df,
            eol = '\n', relation="WNVPTrainDataset")
 str(undersample_df)
 
-testRecs <- combinedForModeling[(wnvpTrainFileNRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
-stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
 write.arff(testRecs, 
            paste0(workingSubDir, "/", "test", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTestDataset")
@@ -460,33 +490,36 @@ str(testRecs)
 
 Based upon May 17 Pat Leahy Submittal (Score 0.59642), with one additional predictor: Species bit vectors.
 
+### Feature Selection
+
 Input: 
-    Attributes: Lat/Long, Month, Tmin/Tmax/Tavg, Species bit vectors.
-    Classified Attribute: WnvPresent
-    Observations: all WnvPresent records, 
-        an equal number of !WnvPresent records, randomly sampled.
+
+* Attributes: Lat/Long, Month, Tmin/Tmax/Tavg, Species bit vectors.
+* Classified Attribute: WnvPresent. Two-level factor: "No", "Yes".
+* Observations: all WnvPresent records, plus an equal number of !WnvPresent records, randomly sampled.
         
 Output: train and test datasets in ARFF format for modeling in Weka.
 
-Discussion: NumMosquitos degraded score. It's not an attribute in test dataset. Not using.
-
-Limitations: Dataset rolls over to a new record if number of mosquitos reaches 50.
-TODO: Same date, same lat/long, same Species: combine the records.
+```{r 0528JSReadInMaster}
+trainRecs <- read.arff(paste0(workingSubDir, "/", "train", "Master", ".arff"))
+testRecs <- read.arff(paste0(workingSubDir, "/", "test", "Master", ".arff"))
+stopifnot(nrow(trainRecs) == wnvpTrainFileNRecs)
+stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
+```
 
 ```{r PareDownColumnsToThoseUsedInArffModeling0528JS}
 colsToKeep=c("Latitude", "Longitude", "Month", "Tmin", "Tmax", "Tavg", "WnvPresent")
 colsToKeep=c(colsToKeep, "SpeciesCULEX ERRATICUS", "SpeciesCULEX PIPIENS", 
              "SpeciesCULEX PIPIENS/RESTUANS", "SpeciesCULEX RESTUANS", "SpeciesCULEX SALINARIUS",
              "SpeciesCULEX TARSALIS", "SpeciesCULEX TERRITANS", "SpeciesUNSPECIFIED CULEX")
-combinedForModeling <- combinedww[,names(combinedww) %in% colsToKeep] 
-stopifnot(nrow(combinedForModeling) == (wnvpTrainFileNRecs + wnvpTestFileNRecs))
+trainRecs <- trainRecs [,names(trainRecs) %in% colsToKeep] 
+testRecs <- testRecs [,names(testRecs) %in% colsToKeep] 
 ```
 
 Undersample: use all the WnvPresent==True samples. Randomly select an equal number of False samples. Use that for the training data set.
 
 ```{r UnderSampleNotWnvPresent0528JS}
 curModelIdx <- "0528JS"
-trainRecs <- combinedForModeling[1:wnvpTrainFileNRecs,]
 allWnvPresentTrainRecs <- trainRecs[trainRecs$WnvPresent=="Yes",]
 nFalseObservationsToUse <- nrow(allWnvPresentTrainRecs)
 allNotWnvPresentTrainRecs <- trainRecs[trainRecs$WnvPresent=="No",]
@@ -500,14 +533,26 @@ write.arff(train_0528JS,
 str(train_0528JS)
 
 # Write all the test recs
-testRecs <- combinedForModeling[(wnvpTrainFileNRecs+1):(wnvpTrainFileNRecs+wnvpTestFileNRecs),]
-stopifnot(nrow(testRecs) == wnvpTestFileNRecs)
 write.arff(testRecs, 
            paste0(workingSubDir, "/", "test", curModelIdx, ".arff"), 
            eol = '\n', relation="WNVPTestDataset")
 #str(testRecs)
 ```
 
+### Model
+
+Weka Modeling: same as Pat Leahy using on May 17th:
+
+* Opened the training set in Weka. Had
+* Generated a Decision Tree using the J48 classifier. 
+* Used Pat's parameter settings, "-C 0.5 -M 2".
+
+### Notes
+
+* NumMosquitos degraded score. It's not an attribute in test dataset. Not using.
+* Dataset ideosynchrocy not dealt with: Dataset rolls over to a new record if number of mosquitos reaches 50.
+    * TODO: Combine records with same date, same lat/long, same Species. Sum NumMosquitos, set WnvPresent if any record is WnvPresent.
+    
 ### Screenshot of Leaderboard
 
 ![May 28 Jim Stearns Submittal](../Submissions/Submission_0528_JS_2/Submission_0528_JS_2_Leaderboard.png)
@@ -521,7 +566,8 @@ Added weather data: daily average temperature and wind speed.
 Modeling is done in R, not Weka.
 
 ```{r sourceGam, cache=TRUE}
-source("src/starter_GAM.R", echo=TRUE, verbose=FALSE, print.eval=FALSE)
+source("src/starter_GAM.R", echo=TRUE, verbose=FALSE, print.eval=FALSE, 
+       prompt.echo=" ", continue.echo="  ")
 ```
 
 ### Screenshot of Leaderboard
@@ -544,17 +590,26 @@ source("src/starter_GAM.R", echo=TRUE, verbose=FALSE, print.eval=FALSE)
 ## A.2 Dataset download and unpacking
 
 This R and Python code downloads the WNVP datasets from Kaggle. 
+
+Why use Python instead of R? Why not just use read.csv("https://www.gaggle.com/datalocation")?
+
+The read.csv() function does not support SSL when reading from a URL.
+
+R's download.file(<https url>, <destfile>, method="curl") does download HTTPS URLs, but has no facility for establishing authentication credentials for a session. I.e. Kaggle requires a Kaggle login in order to download data files.
+
+There may be a way in R, but I found a way in Python, and using it from R using RPython works.
+
 Some setup is required:
 
 * One's Kaggle username and password must be
 defined as environment variables where R is running.
 * Easiest way to set environment variable for R: Create (add to) ~/.Renviron file (kaggleUsername="XXXX" and kagglePassword="YYYY").
 
-Alternatively, files can be downloaded manually.
-  
 ```{r GetDatasetsIntoInputDir,eval=FALSE}
 ``` 
 
+Alternatively, files can be downloaded manually.
+  
 ### File UrlFileDownloaderWithLogin.py:
 ```
 __author__ = 'jimstearns'
