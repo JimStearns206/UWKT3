@@ -3,17 +3,20 @@
 # published by: Girma Kejela
 # Title: H20 Randomforest 0.73+  
 ###################################
- 
+
+# Found by Linqhua Qiu on Kaggle competition forum for WNVP. URL:
+# https://www.kaggle.com/girmak/predict-west-nile-virus/h20-randomforest-0-73
+# Minor mods (names of input and output files) by Jim Stearns
 
 #install.packages("mefa")
 library(mefa)
 library(lubridate)
 library(readr)
-train = read.csv("C:/Users/.../train.csv",header=TRUE,stringsAsFactors = T)
-test = read.csv("C:/Users/.../test.csv",header=TRUE,stringsAsFactors = T)
-weather = read.csv("C:/Users/.../weather.csv",header=TRUE,stringsAsFactors = T)
-spray = read.csv("C:/Users/.../spray.csv",header=TRUE)
-subm = read.csv("C:/Users/.../sampleSubmission.csv",header=TRUE,stringsAsFactors = F)
+train = read.csv("input/train.csv",header=TRUE,stringsAsFactors = T)
+test = read.csv("input/test.csv",header=TRUE,stringsAsFactors = T)
+weather = read.csv("input/weather.csv",header=TRUE,stringsAsFactors = T)
+#spray = read.csv("input/spray.csv",header=TRUE)
+subm = read.csv("input/sampleSubmission.csv",header=TRUE,stringsAsFactors = F)
 
 weather[(weather == " ")] <- NA
 weather[(weather == "M")] <- NA
@@ -93,4 +96,4 @@ p <- as.data.frame(pred)
 summary(p)
 subm[,2] = p[,3]
 summary(subm)
-write.csv(subm,file="C:/Users/.../wNileVirusRF.csv",row.names=FALSE)
+write.csv(subm,file="working/wNileVirusRF.csv",row.names=FALSE)
