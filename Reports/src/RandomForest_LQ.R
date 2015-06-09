@@ -8,8 +8,8 @@
 # https://www.kaggle.com/girmak/predict-west-nile-virus/h20-randomforest-0-73
 # Minor mods (names of input and output files) by Jim Stearns
 
-#install.packages("mefa")
-library(mefa)
+#install.packages("mefa") 
+library(mefa) # For fill.na
 library(lubridate)
 library(readr)
 train = read.csv("input/train.csv",header=TRUE,stringsAsFactors = T)

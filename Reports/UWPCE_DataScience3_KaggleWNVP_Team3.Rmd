@@ -20,9 +20,9 @@ The class was broken up into three teams of roughly 8 students. This is the repo
 
 The West Nile Virus Prediction (WNVP) competition's goal was to "Predict West Nile virus in mosquitos across the city of Chicago.":
 
-![KaggleWnvpHomePage](screenshots/KaggleWnvpHomePage.png)
+![KaggleWnvpHomePage](images/KaggleWnvpHomePage.png)
 
-The WNVP contest started on April 22nd and will end 17 June 2015. UWKT3's first submission was on May 12th. Its last so far was on June 4th.
+The WNVP contest started on April 22nd and will end 17 June 2015. UWKT3's first submission was on May 12th. Its last will be no later than June 9th.
 
 ## 0.2 Team Goals
 
@@ -197,7 +197,9 @@ stopifnot(nrow(test_df) == wnvpTestFileNRecs)
     * Both: Add bit vectors of each of the levels of the Species factor (a new column for each of the factor levels, with a zero or 1 value). Leave the Species as well.
     * Both: Convert date into date format, add "Year", "Month", and "Week" factor attributes.
    
-```{r FeatureFixupAndCreation}
+Please see Appendix A.3 below for a listing of the R source that performs these steps.
+
+```{r FeatureFixupAndCreation, echo=FALSE, results='hide',message=FALSE}
 
 # WnvPresent. Train: convert to factor. Test: add as factor, default value of "No".
 train_df$WnvPresent <- factor(train_df$WnvPresent, labels=c("No", "Yes"))
@@ -352,15 +354,75 @@ write.arff(testWithWeather,
 
 # 2. Data Exploration and Analysis
 
-*TBD*
+Training data included 10,524 records with the following eleven fields:
+
+1.  Date (Odd-numbered years from 2007 to 2013) – 95 entries
+2.	Species (seven species of the genus Culex) – 7 distinct entries
+3.	Block – 64 distinct entries
+4.	Trap Number - 136 distinct entries
+5.	Address – 138 distinct entries
+6.	Street – 128 distinct entries
+7.	Address Number and Street – 138 distinct entries
+8.	Latitude – 138 distinct entries
+9.	Longitude – 138 distinct entries
+10.	Address Accuracy - 4 distinct entries
+11.	Number of Mosquitos – 50 distinct entries
+12.	West Nile Virus Present (WNV) – 2 distinct classes
+
+Of the 10,524 records, 831 were duplicates.  The 11th Attribute, Number of Mosquitos, was not included in the test dataset.  For this reason, this attribute was removed leaving 1,083 duplicate records in the remaining training data set.  This resulted in a final data set of 8,610 records in the training data.
+
+### Date
+
+* 2007 dates included 2,837 records that started 5/29 and ended 10/9.  WNV was not detected prior to 7/18 nor after 10/4.
+* 2009 dates included 1,921 records that started 5/28 and ended 10/1.  WNV was not detected prior to 7/24 nor after 9/25.
+* 2011 dates included 1,794 records that started 6/10 and ended 9/30.  WNV was not detected prior to 7/25 nor after 9/23.
+* 2013 dates included 2.058 records that started 6/7 and ended 9/26.  WNV was not detected prior to 6/28 but were detected until 9/26.
+
+**Key Finding:  In years 2007, 2009 and 2011, the initial 45 - 60 days of data do not contain signal regarding the presence of WNV.  This is also true of the last 5 to 7 days of the period covered for each year.  There was a similar, but shorter, occurrence for 2013 where the first 21 days did not include signal.**
+
+### Species
+
+Of the seven species of Culex, only C. Pipiens, C. Restuans and the combination C.Pipiens/C.Resutans carried WNV.  The remaining four species did not.
+
+**Key Finding:  the records for C. Salinarius, C. Territans , C. Tarsalis and C. Erraticus contain no signal regarding WNV.**
+
+### Trap
+
+The data set included 138 separate trap numbers.  Of these, 39 traps did not detect WNV in any of the training set years. 
+
+The traps at O’Hare airport included more detections of WNV than any other site.
+
+**Key Finding:  the 39 traps did not include signal regarding the presence of WNV.**
+
+### Block, Address, Street and Address Number and Street 
+
+These four attributes were largely the same and provided little information separate from the block and trap location information.
+
+### Latitude and Longitude
+
+Latitude of mosquito traps ranged from 41.01743 to 42.01743 North Latitude
+Longitude of mosquito traps ranged from -87.931to -87.5316 West Longitude
+
+The following graphic shows the trap locations furthest points North, South, East and West:
+
+![WNV Present: Furthest Points N/S/E/W](images/Map_WNVPresent_RR.png)
+
+### West Nile Virus Present
+
+WNV was present in 457 of the 8610 records.
 
 # 3. Features for Modeling
 
-*TBD*
+Please see the discussions under each Kaggle submission in Section 4 below.
 
 # 4. Kaggle Submissions
 
-![UWKT3 Kaggle Submissions](screenshots/UWKT3_WnvpSubmittals.png)
+The following is a summary of all UWKT3 team submissions to Kaggle's WNVP competition:
+
+![UWKT3 Kaggle Submissions](images/UWKT3_WnvpSubmittals_1of2.png)
+![UWKT3 Kaggle Submissions](images/UWKT3_WnvpSubmittals_2of2.png)
+
+Screenshots of Kaggle's list of team submissions can be found in the appendix.
 
 ## 4.1 May 17 Pat Leahy Submittal (Decision Tree, Score 0.59642)
 
@@ -550,7 +612,7 @@ Weka Modeling: same as Pat Leahy using on May 17th:
 ### Notes
 
 * NumMosquitos degraded score. It's not an attribute in test dataset. Not using.
-* Dataset ideosynchrocy not dealt with: Dataset rolls over to a new record if number of mosquitos reaches 50.
+* Dataset idiosyncrasy not dealt with: Dataset rolls over to a new record if number of mosquitos reaches 50.
     * TODO: Combine records with same date, same lat/long, same Species. Sum NumMosquitos, set WnvPresent if any record is WnvPresent.
     
 ### Screenshot of Leaderboard
@@ -574,11 +636,120 @@ source("src/starter_GAM.R", echo=TRUE, verbose=FALSE, print.eval=FALSE,
 
 ![June 2 Andy Ewing Submittal](../Submissions/Submission_0602_AE_71862/ewingSubmission2_Leaderboard.jpg)
 
+## 4.4 June 6 Beth Britt Submittal (Decision Tree and Bagging, Score 0.54551)
+
+### Data Preparation
+
+Initial data preparation and data exploration was in Excel, and then later in Weka. Knime was useful and found to be very helpful. Data preparation work included incorporating weather data, which Pat had helpfully aligned to the train and test data. Week numbers and years were used as features instead of dates. Bit vector columns were added for each of the six mosquito species.  
+
+Excel charts were easy to build to see the trends for many of the features, and filtering made it easy to see where there were missing values. There were a lot of “T”’s and “M”s in numeric columns. For some of these columns, rough estimates were made and then checked in Weka to determine which ones seemed to be useful. Many of these did not seem useful, so were deleted. PrecipTotal was one column that was very useful but needed some work: most of the missing values were set to 0 (see below for more on PrecipTotal). NumMosquitos was one feature in the training set that seemed to carry a bit of signal, but it is not in the test data, so it was deleted from the attributes.  A number of traps had “A”, “B” or “C” at the end, and that were very close geographically to their “Parent” trap number, and wound up stripping the A-C’s out.  Need to do some more testing to see if this was really useful.  
+
+### Data Exploration and Analysis
+
+Weka was used for a lot of additional processing, exploration and analysis. WnvPresent was converted to a nominal. Non-numeric attributes were identified. A number of the attribute algorithms were used on the initial data set to identify which attributes carried more signal. There was a significant learning curve with Weka but there was a significant payoff in time to explore and model.  
+
+One Learning:  Don't get too excited about a feature in the training data until double-checking that the feature is present in the test dataset. For instance, PrecipTotal data, which had the potential to be a valuable feature, was largely missing.
+
+### Features for Modeling
+
+Weka was used to identify the following attributes as being generally predictive:
+
+![BethBrittFeaturesForModeling](images/BethBrittFeaturesForModeling.png)
+
+### Modeling Strategy
+
+A number of models were run in Weka (decision trees, random foresets, naïve bayes, etc.) but they performed poorly on the training data, so went back to do more work on the data. From observation and analysis, it was noticed that some species of Mosquitos never had the West Nile virus, so removed those from the train set (and set WNVPresent to 0 for those records in the test set submission).  There was never an occurrence of the West Nile virus prior to the end of June, so these were removed as well (and set WNVPresent for these records in the test set submission). Retraining on this subset seemed to perform better.  
+
+One feature was calculated: had ever been a mosquito captured for this trap. This feature performed extremely well with the training data, but then not well at all on the test data. 
+A hidden signal or overfitting seems likely.
+
+## 4.5 June 7 Linghua Qiu Submittal (Random Forest, Score 0.72228)
+
+Linghua followed the competition forum and found a 
+[random forest modeling R script](https://www.kaggle.com/girmak/predict-west-nile-virus/h20-randomforest-0-73) made generally available to fellow competitors by Girma Kejela.
+
+Trained by RandomForest, keeping the original probabilities instead of converting the prediction to 0 or 1. 
+
+Uses R packages "h20": "The Open Source In-Memory, Prediction Engine for Big Data Science. Indeed, H2O offers an impressive array of machine learning algorithms. The H2O R package provides functions for building GLM, GBM, Kmeans, Naive Bayes, Principal Components Analysis, Principal Components Regression, Random Forests and Deep Learning (multi-layer neural net models)." Please see ["Diving into H2O"](http://blog.revolutionanalytics.com/2014/04/a-dive-into-h2o.html) for a fuller introduction.
+
+```{r sourceRandomForestH2O, cache=TRUE}
+source("src/RandomForest_LQ.R", echo=TRUE, verbose=FALSE, print.eval=FALSE, 
+       prompt.echo=" ", continue.echo="  ")
+```
+
 # 5. Modeling Strategy
 
-*TBD. Unclear: discuss modeling strategy here, or in discussion of submittals?*
+Please see the discussions under each Kaggle submission in Section 4 above.
+
+Here's a summary of the models we tried and would have liked to have tried.
+
+We used decision trees (Pat), random forests (Linghua), Naive Bayes (Rob), and Generalized Additive Models (Andy). As far as models that we did not time to use during this course, the question of did we skip some models that are highly regarded. In a major comparison of classification algorithms (Caruana & Niculescu-Mizil, ICML 2006), the following was published:
+
+Model               |  Ranking
+------------------- | --------
+Boosted Trees       |   0.899	(trees)
+Random Forest	    |	0.896	(trees)
+Bagged Trees	    |   0.885	(trees)
+SVMs			    |   0.869
+Neural Networks	    |   0.844
+K-Nearest Neighbors |   0.811
+Boosted Stumps	    |   0.792
+Decision Trees		|   0.698
+Logistic Regression	|   0.697
+Naive Bayes		    |   0.664
+
+Boosted Tree - The underlying algorithm we use is a boosted tree ranking algorithm called LambdaMART, where a split at a given vertex in each decision tree is determined by the split criterion for a particular feature. Our contributions are twofold. First, we implement a method for improving the speed of training when the training data fits in main memory on a single machine by distributing the vertex split computations of the decision trees. The model produced is equivalent to the model produced from centralized training, but achieves faster training times. Second, we develop a training method for the case where the training data size exceeds the main memory of a single machine. Our second approach easily scales to far larger datasets, that is, billions of examples, and is based on data distribution. Results of our methods on a real-world web dataset indicate significant improvements in training speed.
+
+Random forest - an ensemble learning approach for classification, in which “weak learners” collaborate to form “strong learners,” using a large collection of decorrelated decision trees (the random forest). Instead of developing a solution based on the output of a single deep tree, however, random forest aggregates the output from a number of shallow trees, forming an additional layer to bagging. Bagging constructs n predictors, using independent successive trees, by bootstrapping samples of the dataset. The n predictors are combined to solve a classification or estimation problem through averaging. Although individual classifiers are weak learners, all the classifiers combined form a strong learner. Whereas single decision trees experience high variance and high bias, random forest averages multiple decision trees to improve estimation performance. A decision tree, in ensemble terms, represents a weak classifier. The term forest denotes the use of a number of decision trees to make a classification decision.
+
+The random forest algorithm can be summarized as follows:
+
+*	To construct B trees, select n bootstrap samples from the original dataset.
+*	For each bootstrap sample, grow a classification or regression tree.
+*	At each node of the tree:
+    *	m predictor variables (or subset of features) are selected at random from all the predictor variables (random subspace).
+    *	The predictor variable that provides the best split performs the binary split on that node.
+    *	The next node randomly selects another set of m variables from all predictor variables and performs the preceding step.
+*	Given a new dataset to be classified, take the majority vote of all the B subtrees.
+
+By averaging across the ensemble of trees, you can reduce the variance of the final estimation. Random forest offers good accuracy and runs efficiently on large datasets. It is an effective method for estimating missing data and maintains accuracy, even if a large portion of the data is missing. Additionally, random forest can estimate the relative importance of a variable for classification.
+
+Bagged Trees - This idea in fact is the basis for a powerful method referred to as “bootstrap aggregation,” or simply “bagging.” Bagging can be used for many kinds of predictors, not just decision trees. The basic premise for bagging is that, if the underlying predictor is unstable, then aggregating the predictor over multiple bootstrap samples will produce a more accurate, and more stable, procedure. To bag a classification tree, the procedure is as follows (bagging can be applied to regression trees and survival trees in a similar fashion):
+
+1.	Draw a bootstrap sample of the original data.
+2.	Construct a classification tree using data from Step 1.
+3.	Repeat Steps 1 and 2 many times, independently.
+4.	Calculate an aggregated classifier using the trees formed in Steps 1 to 3. 
+
+Use majority voting to classify a case. Thus, to determine the predicted outcome for a case, take the majority vote over the predicted outcomes from each tree in Steps 1 to 3.
 
 # 6. Ensemble Model Opportunities
+
+Team UTKT3 did not employ ensembles. We did discuss one possible application, based upon an exploration of the training data:
+
+* Data from May – mid-July is mostly noise:  no WNV detected.
+* Data from the last week of September:  very little WNV detected
+* Data from all but three species options:  no WNV detected.
+* Data from C.Restuans:  very little WNV detected
+ 
+The data above distracts from the what little WNV signal there is in the overall training data.
+
+It occurred to us that an ensemble of two classifiers, each applied to different subsets of observations in the dataset, could increase the audibility of a faint signal by reducing the noise of irrelevant rows and attributes.
+
+For each observation a threshold filter would send the task to one of two alternate classifiers: a force-not-present classification if observation is in the quiescent date spans or for one of the mosquito species not tied to WNV; else to a de-noised "real" classifier.
+
+# 7. Competition Strategy
+
+We were told that participating in a Kaggle competition is an excellent way to learn data science. This has proved out.
+
+Struggling with real world datasets always helps learning.
+
+More surprising is the generosity of participants in sharing their knowledge with fellow competitors in the competition forum. Two examples:
+
+* We learned about generalized additive modeling with a script contained in a posting "baby steps: breach 0.71 with GAM". 
+* We learned about random forests - and the R "H2O" package in a posting "H20 Randomforest 0.73+"
+
+A Kaggle competition has similarities to a bicycle race. There are leaders far out ahead of the peloton who are pushing the limits, and share nothing outside the team. Within the pelotron, there is an exchange of ideas, of drafting.
 
 # Appendix
 
@@ -659,7 +830,12 @@ def Download(url, username, password, local_filename):
         return(False)
 ```
 
-## A.3 Prepare Weka results as ARFF file as submittal file to Kaggle as CSV
+## A.3 Feature Selection/Creation
+
+```{r FeatureFixupAndCreation, eval=FALSE}
+```
+
+## A.4 Prepare Weka results as ARFF file as submittal file to Kaggle as CSV
 
 File PrepareWekaArffResultsForKaggleCsvSubmittal: 
 
@@ -689,3 +865,13 @@ str(testClassified_df)
 
 write.csv(testClassified_df, paste0(fileBasePath, ".csv"), row.names=FALSE)
 ```
+
+## A.5 Complete List of UWKT3 WNVP Submissions (thru 9-Jun-2015)
+
+![1of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_1of7.png)
+![2of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_2of7.png)
+![3of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_3of7.png)
+![4of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_4of7.png)
+![5of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_5of7.png)
+![6of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_6of7.png)
+![7of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_7of7.png)
