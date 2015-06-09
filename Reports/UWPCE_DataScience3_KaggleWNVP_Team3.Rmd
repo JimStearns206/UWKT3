@@ -22,13 +22,14 @@ The West Nile Virus Prediction (WNVP) competition's goal was to "Predict West Ni
 
 ![KaggleWnvpHomePage](images/KaggleWnvpHomePage.png)
 
-The WNVP contest started on April 22nd and will end 17 June 2015. UWKT3's first submission was on May 12th. Its last will be no later than June 9th.
+The WNVP contest started on April 22nd and will end 17 June 2015. UWKT3's first submission was on May 12th. The last covered by this report was on June 8th.
 
 ## 0.2 Team Goals
 
-1. Experiment with modelling alternative on a real-world dataset.
+1. Experiment with modelling alternatives on a real-world dataset.
 2. Learn how to participate in a Kaggle competition.
-3. Non-Goal: win the competition, or even score highly.
+3. Create reproducible "golden" train and test datasets that could form the basis of multiple modeling experiments.
+4. Non-Goal: win the competition, or even score highly.
 
 ## 0.3 Team Members
 
@@ -40,6 +41,14 @@ The WNVP contest started on April 22nd and will end 17 June 2015. UWKT3's first 
 * Chris Ross
 * Robert Russell
 * Jim Stearns
+
+## 0.4 Summary of Submissions
+
+As of 9AM on the due date of June 9th, seven UWKT3 team members had made a combined total of 28 submissions. The highest UWKT3 Area-Under-Curve score was 0.73115:
+
+![UWKT3_HighWaterMarkSubmission](images/UWKT3_WnvpHighWaterMarkSubmittal.png)
+
+The current overall leading score, by "nhlx5haze", is 0.87196. Our current rank is 547th out of 1224 individuals and teams making at least one submission.
 
 # 1. Data Preparation
 
@@ -354,7 +363,7 @@ write.arff(testWithWeather,
 
 # 2. Data Exploration and Analysis
 
-Training data included 10,524 records with the following eleven fields:
+Training data included 10,524 records with the following twelve fields:
 
 1.  Date (Odd-numbered years from 2007 to 2013) – 95 entries
 2.	Species (seven species of the genus Culex) – 7 distinct entries
@@ -439,8 +448,8 @@ We carried out our data preparation in Excel. We copied the files train.csv,
 test.csv and weather.csv into tabs in an Excel workbook. There were two weather 
 stations in the weather data. We calculated the distance from each observation 
 point to each of the two weather stations. We used an Excel macro copied from 
-http://www.codecodex.com/wiki/Calculate_distance_between_two_points_on_a_globe#E
-xcel to calculate the distances given latitude and longitude. We then 
+http://www.codecodex.com/wiki/Calculate_distance_between_two_points_on_a_globe#Excel
+to calculate the distances given latitude and longitude. We then 
 determined which weather station was closer to each point. We used the weather 
 station ID and date as a key to join test and training records to the weather 
 records. We used Excels VLOOKUP function to implement a join.
@@ -500,7 +509,7 @@ file. Instead we right clicked on the results in the result list and selected
 window which opened as an ARFF file. We converted this to a CSV, changed some 
 of the columns and this gave me a submission file to upload to Kaggle.
 We uploaded this submission and achieved an accuracy of 0.59642. This is better 
-than the accuracy of 0.5 we achieved when prediction no West Nile Virus for 
+than the accuracy of 0.5 we achieved when predicting no West Nile Virus for 
 every test record.
 
 ### Reproduce ARFF datasets for Use as Model Input in Weka
@@ -663,14 +672,68 @@ A number of models were run in Weka (decision trees, random foresets, naïve bay
 One feature was calculated: had ever been a mosquito captured for this trap. This feature performed extremely well with the training data, but then not well at all on the test data. 
 A hidden signal or overfitting seems likely.
 
-## 4.5 June 7 Linghua Qiu Submittal (Random Forest, Score 0.72228)
+## 4.5 June 7 Rob Russell (Associative Learning, Score 0.67694)
+
+Combines associative learning rules with the Naïve Bayes approach. Included rules that focus on traps that have never had a WNV positive finding.
+
+## 4.6  June 5-8  Greg Hogue (SMOTE and Naive-Bayes Decision Tree, Score 0.59286)
+
+### Approach to Data
+
+Greg spent an overwhelming majority of his project in data preparation, making attempts to aggregate spray and weather data to better inform the conditions between the trap-check date and the trap's previous check date.  Spray data was merged to each trap on the closest the spray pattern occurred to the trap and the days between that spray and the trap check date.  Weather data was aggregated as well, using max's, min's or averages where appropriate over the period of time between check dates.
+While included in the initial strategy, the spray data as well as the mosquito counts were thrown out as there were no corresponding measures for the test data.  Some further preparation to the data included resolving the check dates to their corresponding weeks of the year, and changing the class (WNVPresent) to a binary value (Y or N in this case).  All of this preparation was done in SQL (SQL Server 2014) and touched-up a little in Excel.  (Greg's comfort zone is in the SQL realm, though he can easily see how other tools would be far more efficient.)
+
+### Data
+
+The final data sets fell primarily into two versions, an 'abridged' version and a 'complete' version.  The 'abridged' version was a rough stab at finding features that seemed most prominent based on a cursory look at an early decision tree.  (List is 'complete set'.  The * items make up the 'abridged' set.)
+
+* *week
+* latitude
+* *longitude
+* *max temp (all weather aggregated over window between trap checks)
+* min temp
+* avg temp
+* avg dewpoint
+* *avg wetbulb
+* avg precipitation
+* avg station pressure
+* *avg result speed
+* avg result direction
+* avg speed
+* days with rain
+* days with mist
+* days with thunderstorms
+* days with haze
+* days with drizzle
+* *species (some iterations of data had broken into binary categories)
+* *wnv present (CLASS)
+
+### Training Model
+
+He spent not-too-much time trying out models in the tree category (J48, NBayes, Random Forest), and found some success with NBayes, testing at a 94% accuracy and a 90+ AUC.  He then spent too-much time trying to get the test data to play well with the training data.  (Turns out the suspect was the 'Species': eight distinct values in one data set but only seven in the other.  Also, {Y,N} was always {N,Y} in the opposite set.)  Learned a lot about how .arff headers work.
+
+### Kaggle Submissions
+
+Once the stars had aligned, the data all working and the model testing well, the submissions fared rather poorly (numbers are Kaggle score (AUC)):
+
+* Submission 1 - .500  (forecasts were out of sequence)
+* Submission 2 - .545 - Trained as naive-Bayes decision tree.  Applied SMOTE to train set but at only 100%. Features were limited to a handful.
+* Submission 3 - .554 - Applied random forest to each of three training sets broken up by species (the three species with instances of WNV), and forced forecast to rest of species to 'N'.  Then stitched all of the results together.  The rationale for this split approach was to better account for the fact that there are a disproportionate amount of entries for the rarer species in the test set than in the training set.
+* Submission 4 - .494  (forecasts were out of sequence)
+* Submission 5 - .593 - Went back to the naive-Bayes tree, but with nearly all of the original features of the data (as opposed to the abridged set in tries 1 - 3).
+
+The models used in all of these submissions had AUC scores at training (10k cross-validated) of .88 or better (Greg didn't note the score for each entry).
+
+A couple of the most disappointing entries were due to a mis-alignment of the test data.  Forecast results were not in the same order as the ID's, but were assumed to be.  (Another potential pitfall in the data-prep range...one that's not obvious until it's too late.)  Greg is unsure about why the rest are so off and is still investigating; likely next steps is accounting for disproportionate training entries by year and exploring more robust feature selection strategies.
+
+## 4.7 June 7 Linghua Qiu Submittal (Random Forest, Score 0.72228)
 
 Linghua followed the competition forum and found a 
 [random forest modeling R script](https://www.kaggle.com/girmak/predict-west-nile-virus/h20-randomforest-0-73) made generally available to fellow competitors by Girma Kejela.
 
 Trained by RandomForest, keeping the original probabilities instead of converting the prediction to 0 or 1. 
 
-Uses R packages "h20": "The Open Source In-Memory, Prediction Engine for Big Data Science. Indeed, H2O offers an impressive array of machine learning algorithms. The H2O R package provides functions for building GLM, GBM, Kmeans, Naive Bayes, Principal Components Analysis, Principal Components Regression, Random Forests and Deep Learning (multi-layer neural net models)." Please see ["Diving into H2O"](http://blog.revolutionanalytics.com/2014/04/a-dive-into-h2o.html) for a fuller introduction.
+Uses R "h2o" interface package to H2O: "The Open Source In-Memory, Prediction Engine for Big Data Science. H2O offers an impressive array of machine learning algorithms. The H2O R package provides functions for building GLM, GBM, Kmeans, Naive Bayes, Principal Components Analysis, Principal Components Regression, Random Forests and Deep Learning (multi-layer neural net models)." Please see ["Diving into H2O"](http://blog.revolutionanalytics.com/2014/04/a-dive-into-h2o.html) for a fuller introduction.
 
 ```{r sourceRandomForestH2O, cache=TRUE}
 source("src/RandomForest_LQ.R", echo=TRUE, verbose=FALSE, print.eval=FALSE, 
@@ -683,7 +746,19 @@ Please see the discussions under each Kaggle submission in Section 4 above.
 
 Here's a summary of the models we tried and would have liked to have tried.
 
-We used decision trees (Pat), random forests (Linghua), Naive Bayes (Rob), and Generalized Additive Models (Andy). As far as models that we did not time to use during this course, the question of did we skip some models that are highly regarded. In a major comparison of classification algorithms (Caruana & Niculescu-Mizil, ICML 2006), the following was published:
+### Models Used
+
+* Decision trees (Pat, Jim, Beth)
+* Random forests (Linghua)
+* Associative Learning (Rob)
+* SMOTE and Naive-Bayes Decision Tree (Greg)
+* Generalized Additive Models (Andy)
+
+### Models Not Used
+
+As far as models that we did not have time to use during this course, 
+the question is: did we skip some models that are highly regarded?
+In a major comparison of classification algorithms (Caruana & Niculescu-Mizil, ICML 2006), the following was published:
 
 Model               |  Ranking
 ------------------- | --------
@@ -869,9 +944,15 @@ write.csv(testClassified_df, paste0(fileBasePath, ".csv"), row.names=FALSE)
 ## A.5 Complete List of UWKT3 WNVP Submissions (thru 9-Jun-2015)
 
 ![1of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_1of7.png)
+
 ![2of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_2of7.png)
+
 ![3of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_3of7.png)
+
 ![4of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_4of7.png)
+
 ![5of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_5of7.png)
+
 ![6of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_6of7.png)
+
 ![7of7](../Submissions/screenshots/Submissions_KaggleWnvpUwkt3_7of7.png)
