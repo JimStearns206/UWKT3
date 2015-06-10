@@ -824,7 +824,7 @@ More surprising is the generosity of participants in sharing their knowledge wit
 * We learned about generalized additive modeling with a script contained in a posting "baby steps: breach 0.71 with GAM". 
 * We learned about random forests - and the R "H2O" package in a posting "H20 Randomforest 0.73+"
 
-A Kaggle competition has similarities to a bicycle race. There are leaders far out ahead of the peloton who are pushing the limits, and share nothing outside the team. Within the pelotron, there is an exchange of ideas, of drafting.
+A Kaggle competition has similarities to a bicycle race. There are leaders far out ahead of the peloton who are pushing the limits, and share nothing outside the team. Within the peloton, there is an exchange of ideas, of drafting.
 
 # Appendix
 
